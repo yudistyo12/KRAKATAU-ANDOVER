@@ -5,10 +5,18 @@ import cv2
 import os
 import time
 import threading
+import logging
 
 from flask import Flask, Response, send_from_directory, abort, jsonify
 
 from gps import get_gps_data
+from motor_state import get_motor_data
+
+# =========================================================
+# SILENCE HTTP REQUEST LOGS (WERKZEUG)
+# =========================================================
+log = logging.getLogger('werkzeug')
+log.setLevel(logging.ERROR)
 
 
 # =========================================================
@@ -20,18 +28,29 @@ UNDERWATER_CAMERA_INDEX = 2
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-SURFACE_PHOTO_DIR = os.path.join(
-    BASE_DIR,
-    "surface"
-)
-
-UNDERWATER_PHOTO_DIR = os.path.join(
-    BASE_DIR,
-    "underwater"
-)
+SURFACE_PHOTO_DIR = os.path.join(BASE_DIR, "surface")
+UNDERWATER_PHOTO_DIR = os.path.join(BASE_DIR, "underwater")
 
 STREAM_HOST = "0.0.0.0"
 STREAM_PORT = 5001
+
+
+# =========================================================
+# HEARTBEAT & FAILSAFE TRACKER (INTERNAL)
+# =========================================================
+
+last_gcs_heartbeat = time.time()
+
+def trigger_heartbeat():
+    global last_gcs_heartbeat
+    last_gcs_heartbeat = time.time()
+
+def reset_heartbeat():
+    global last_gcs_heartbeat
+    last_gcs_heartbeat = time.time()
+
+def is_gcs_active(timeout=3.0):
+    return (time.time() - last_gcs_heartbeat) <= timeout
 
 
 # =========================================================
@@ -48,11 +67,6 @@ UNDERWATER_HEIGHT = 480
 UNDERWATER_FPS = 30
 UNDERWATER_FORMAT = "MJPG"
 
-
-# =========================================================
-# STREAM CONFIG
-# =========================================================
-
 READ_FPS = 20.0
 JPEG_QUALITY = 80
 
@@ -63,31 +77,18 @@ JPEG_QUALITY = 80
 
 class _CameraGrabber:
 
-    def __init__(
-        self,
-        camera_index,
-        label,
-        width,
-        height,
-        fps,
-        pixel_format,
-        rotate_left=False
-    ):
-
+    def __init__(self, camera_index, label, width, height, fps, pixel_format, rotate_left=False):
         self.camera_index = camera_index
         self.label = label
-
         self.width = width
         self.height = height
         self.fps = fps
         self.pixel_format = pixel_format
-        
         self.rotate_left = rotate_left
 
         self.cap = None
         self.thread = None
         self.running = False
-
         self.latest_frame = None
         self.frame_lock = threading.Lock()
 
@@ -97,11 +98,7 @@ class _CameraGrabber:
             return
 
         print(f"Membuka kamera {self.label} /dev/video{self.camera_index}...")
-
-        self.cap = cv2.VideoCapture(
-            self.camera_index,
-            cv2.CAP_V4L2
-        )
+        self.cap = cv2.VideoCapture(self.camera_index, cv2.CAP_V4L2)
 
         if not self.cap.isOpened():
             print(f"ERROR: kamera {self.label} tidak dapat dibuka")
@@ -118,12 +115,7 @@ class _CameraGrabber:
         actual_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         actual_fps = self.cap.get(cv2.CAP_PROP_FPS)
 
-        print(
-            f"Kamera {self.label}: "
-            f"{actual_width}x{actual_height} "
-            f"@ {actual_fps:.1f} FPS "
-            f"| {self.pixel_format}"
-        )
+        print(f"Kamera {self.label}: {actual_width}x{actual_height} @ {actual_fps:.1f} FPS | {self.pixel_format}")
 
         self.running = True
         self.thread = threading.Thread(
@@ -143,10 +135,7 @@ class _CameraGrabber:
             ret, frame = self.cap.read()
             if ret:
                 if self.rotate_left:
-                    frame = cv2.rotate(
-                        frame,
-                        cv2.ROTATE_90_COUNTERCLOCKWISE
-                    )
+                    frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
                 with self.frame_lock:
                     self.latest_frame = frame
@@ -162,9 +151,8 @@ class _CameraGrabber:
         print(f"Menghentikan kamera {self.label}...")
         self.running = False
 
-        if self.thread is not None:
-            if self.thread.is_alive():
-                self.thread.join(timeout=2.0)
+        if self.thread is not None and self.thread.is_alive():
+            self.thread.join(timeout=2.0)
         self.thread = None
 
         if self.cap is not None:
@@ -190,17 +178,9 @@ class _CameraGrabber:
             return None
 
         os.makedirs(save_dir, exist_ok=True)
-        filename = os.path.join(
-            save_dir,
-            f"{self.label}_{time.strftime('%Y%m%d_%H%M%S')}.jpg"
-        )
+        filename = os.path.join(save_dir, f"{self.label}_{time.strftime('%Y%m%d_%H%M%S')}.jpg")
 
-        success = cv2.imwrite(
-            filename,
-            frame,
-            [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY]
-        )
-
+        success = cv2.imwrite(filename, frame, [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY])
         if not success:
             print(f"ERROR: gagal menyimpan foto {self.label}")
             return None
@@ -240,11 +220,6 @@ _underwater_grabber = _CameraGrabber(
 
 app = Flask(__name__)
 
-
-# =========================================================
-# CORS & OPTIONS HANDLER
-# =========================================================
-
 @app.after_request
 def _add_cors_headers(response):
     response.headers["Access-Control-Allow-Origin"] = "*"
@@ -252,48 +227,39 @@ def _add_cors_headers(response):
     response.headers["Access-Control-Allow-Headers"] = "Content-Type"
     return response
 
-
-# =========================================================
-# GCS FAILSAFE HEARTBEAT ROUTE
-# =========================================================
-
-@app.route("/ping_gcs", methods=["POST", "OPTIONS"])
+@app.route("/ping_gcs", methods=["GET", "POST", "OPTIONS"])
 def ping_gcs():
-    try:
-        from main import update_gcs_heartbeat
-        update_gcs_heartbeat()
-    except ImportError:
-        pass
+    trigger_heartbeat()
     return jsonify({"status": "ok"}), 200
-
-
-# =========================================================
-# GPS TELEMETRY
-# =========================================================
 
 @app.route("/telemetry")
 def telemetry():
+    trigger_heartbeat()
     data = get_gps_data()
     speed_knots = data.get("speed_knots")
     course = data.get("course")
     heading = data.get("heading")
 
+    motor = get_motor_data()
+
     response = jsonify({
         "lat": data.get("latitude"),
         "lon": data.get("longitude"),
-        "speed": (
-            speed_knots * 0.514444
-            if speed_knots is not None
-            else None
-        ),
+        "speed": speed_knots * 0.514444 if speed_knots is not None else None,
         "course": course if course is not None else heading,
         "heading": heading,
         "fix": data.get("fix", False),
         "speed_knots": speed_knots,
         "speed_kmh": data.get("speed_kmh"),
-        "timestamp": data.get("timestamp")
-    })
+        "timestamp": data.get("timestamp"),
 
+        # MOTOR FEEDBACK STM32
+        "left_rpm": motor.get("left_rpm", 0.0),
+        "right_rpm": motor.get("right_rpm", 0.0),
+        "motor_speed_mps": motor.get("speed_mps", 0.0),
+        "motor_direction": motor.get("direction", "STOP"),
+        "motor_updated_at": motor.get("updated_at", 0.0)
+    })
     response.headers["Cache-Control"] = "no-store"
     return response
 
@@ -304,23 +270,17 @@ def telemetry():
 
 def _mjpeg_generator(grabber):
     while True:
+        trigger_heartbeat()
         frame = grabber.get_frame()
         if frame is not None:
-            ok, buffer = cv2.imencode(
-                ".jpg",
-                frame,
-                [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY]
-            )
-
+            ok, buffer = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY])
             if ok:
-                jpg_bytes = buffer.tobytes()
                 yield (
                     b"--frame\r\n"
                     b"Content-Type: image/jpeg\r\n\r\n"
-                    + jpg_bytes
+                    + buffer.tobytes()
                     + b"\r\n"
                 )
-
         time.sleep(1.0 / READ_FPS)
 
 
@@ -336,17 +296,13 @@ _PHOTO_DIRS = {
 def _list_photos(photo_dir):
     if not os.path.isdir(photo_dir):
         return []
-
-    files = [
-        f for f in os.listdir(photo_dir)
-        if f.lower().endswith((".jpg", ".jpeg", ".png"))
-    ]
+    files = [f for f in os.listdir(photo_dir) if f.lower().endswith((".jpg", ".jpeg", ".png"))]
     files.sort(reverse=True)
     return files
 
-
 @app.route("/api/photos/<camera>")
 def api_list_photos(camera):
+    trigger_heartbeat()
     photo_dir = _PHOTO_DIRS.get(camera)
     if photo_dir is None:
         abort(404)
@@ -360,86 +316,54 @@ def api_list_photos(camera):
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     return response
 
-
 @app.route("/photos/<camera>/<path:filename>")
 def get_photo_file(camera, filename):
+    trigger_heartbeat()
     photo_dir = _PHOTO_DIRS.get(camera)
     if photo_dir is None:
         abort(404)
-
     return send_from_directory(photo_dir, filename)
-
-
-# =========================================================
-# CAMERA FEEDS
-# =========================================================
 
 @app.route("/surface_feed")
 def surface_feed():
-    return Response(
-        _mjpeg_generator(_surface_grabber),
-        mimetype="multipart/x-mixed-replace; boundary=frame"
-    )
-
+    return Response(_mjpeg_generator(_surface_grabber), mimetype="multipart/x-mixed-replace; boundary=frame")
 
 @app.route("/underwater_feed")
 def underwater_feed():
-    return Response(
-        _mjpeg_generator(_underwater_grabber),
-        mimetype="multipart/x-mixed-replace; boundary=frame"
-    )
+    return Response(_mjpeg_generator(_underwater_grabber), mimetype="multipart/x-mixed-replace; boundary=frame")
 
 
 # =========================================================
-# FLASK SERVER THREAD CONTROL
+# SERVER CONTROL
 # =========================================================
 
 _flask_thread = None
 
 def _run_flask():
-    app.run(
-        host=STREAM_HOST,
-        port=STREAM_PORT,
-        threaded=True,
-        use_reloader=False
-    )
-
+    app.run(host=STREAM_HOST, port=STREAM_PORT, threaded=True, use_reloader=False)
 
 def start_web_server():
     global _flask_thread
     if _flask_thread is None or not _flask_thread.is_alive():
-        _flask_thread = threading.Thread(
-            target=_run_flask,
-            daemon=True,
-            name="Flask-Streaming"
-        )
+        _flask_thread = threading.Thread(target=_run_flask, daemon=True, name="Flask-Streaming")
         _flask_thread.start()
         print(f"Web API aktif di http://<IP_JETSON>:{STREAM_PORT}/")
-
 
 def start_streaming():
     print("\n==========================================")
     print(" START CAMERA STREAMING")
     print("==========================================\n")
-
     _surface_grabber.start()
     _underwater_grabber.start()
     start_web_server()
-
 
 def stop_streaming():
     _surface_grabber.stop()
     _underwater_grabber.stop()
     print("Semua kamera sudah di-release.")
 
-
-# =========================================================
-# CAPTURE PHOTO WRAPPERS
-# =========================================================
-
 def capture_surface_photo():
     return _surface_grabber.save_snapshot(SURFACE_PHOTO_DIR)
-
 
 def capture_underwater_photo():
     return _underwater_grabber.save_snapshot(UNDERWATER_PHOTO_DIR)
