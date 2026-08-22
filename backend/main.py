@@ -499,6 +499,10 @@ def main():
     ser = None
 
     try:
+        print("Membuka GPS reader (background thread)...")
+        start_gps_reader()
+        start_web_server()
+
         print(f"Membuka serial {PORT}...")
 
         ser = serial.Serial(
@@ -530,9 +534,6 @@ def main():
         print("CASE 1 = AUTO")
         print()
 
-        print("Membuka GPS reader (background thread)...")
-        start_gps_reader()
-        start_web_server()
         print()
 
         while True:
@@ -563,6 +564,13 @@ def main():
         print()
         print("ERROR SERIAL:")
         print(e)
+        print("API GPS tetap aktif; menunggu koneksi STM32...")
+
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            print("\nProgram dihentikan.")
 
     except Exception as e:
         print()
