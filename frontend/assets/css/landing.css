@@ -1,0 +1,235 @@
+.landing-page .liquid-bg {
+    background: var(--bg-1) url("../img/bg.jpg") center / cover no-repeat;
+    filter: blur(4px);
+    transform: scale(1.03);
+}
+
+.landing-container {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 24px 20px;
+    text-align: center;
+}
+
+.landing-logos {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(8px, 5vw, 25px);
+    margin-bottom: 20px;
+    flex-wrap: nowrap;
+}
+
+.logo-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: clamp(64px, 25vw, 140px);
+    height: clamp(64px, 25vw, 140px);
+    border-radius: var(--radius-lg);
+    flex-shrink: 0;
+}
+
+.logo-wrapper img {
+    width: 84%;
+    height: 84%;
+    object-fit: contain;
+    display: block;
+}
+
+.logo-wrapper.img-andover img {
+    filter: brightness(0) invert(1);
+    transform: scale(2.1);
+}
+
+.landing-header h1 {
+    font-size: clamp(20px, 7vw, 32px);
+    font-weight: 800;
+    letter-spacing: clamp(1px, .8vw, 3px);
+    margin-bottom: 6px;
+    white-space: nowrap;
+}
+
+.landing-header p {
+    font-size: clamp(16px, 18px);
+    font-weight: 800;
+    letter-spacing: 3px;
+    margin-bottom: 24px;
+    font-family: tahoma, sans-serif;
+}
+
+.landing-card {
+    border-radius: var(--radius-xl);
+    padding: 34px 32px 32px;
+    max-width: 540px;
+    width: 100%;
+}
+
+.lane-form {
+    padding: 24px;
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    background: rgba(5, 10, 16, .26);
+}
+
+.lane-form h2 {
+    font-size: 21px;
+    font-weight: 700;
+    letter-spacing: .3px;
+    margin-bottom: 18px;
+}
+
+.lane-options {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.lane-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 18px 20px;
+    font: 700 17px var(--font-ui);
+    letter-spacing: 1.2px;
+    border: none;
+    border-radius: 999px;
+    color: #fff;
+    text-decoration: none;
+    background: var(--grad-warm);
+    box-shadow: 0 10px 26px rgba(104, 103, 103, 0.585), inset 0 1px 0 rgba(255, 255, 255, .5);
+    transition: transform .18s var(--ease), filter .25s var(--ease);
+}
+
+.lane-btn:nth-child(2) {
+    background: var(--grad-cool);
+    box-shadow: 0 10px 26px rgba(104, 103, 103, 0.585), inset 0 1px 0 rgba(255, 255, 255, .5);
+}
+
+.lane-btn:hover {
+    transform: translateY(-2px);
+    filter: brightness(1.06);
+}
+
+.lane-btn:active {
+    transform: scale(.97);
+}
+
+@media (max-width: 480px) {
+    .landing-container {
+        padding: 14px 30px;
+    }
+
+    .landing-card {
+        padding: 16px 8px 14px;
+    }
+
+    .landing-logos {
+        gap: 8px;
+        margin-bottom: 10px;
+    }
+
+    .logo-wrapper {
+        width: clamp(50px, 18vw, 68px);
+        height: clamp(50px, 18vw, 68px);
+    }
+
+    .landing-header h1 {
+        font-size: clamp(16px, 6vw, 22px);
+        letter-spacing: clamp(.4px, .45vw, 1.5px);
+        margin-bottom: 4px;
+    }
+
+    .landing-header p {
+        font-size: 12px;
+        letter-spacing: 1.5px;
+        margin-bottom: 14px;
+    }
+
+    .lane-form {
+        padding: 12px 8px;
+    }
+
+    .lane-form h2 {
+        font-size: 16px;
+        margin-bottom: 11px;
+    }
+
+    .lane-options {
+        gap: 9px;
+    }
+
+    .lane-btn {
+        padding: 11px 12px;
+        font-size: 12px;
+        letter-spacing: .8px;
+    }
+}
+
+@media (max-width: 360px) {
+    .landing-container {
+        padding: 10px 24px;
+    }
+
+    .landing-card {
+        padding: 13px 6px 12px;
+    }
+
+    .landing-logos {
+        gap: 5px;
+    }
+
+    .logo-wrapper {
+        width: 52px;
+        height: 52px;
+    }
+
+    .landing-header h1 {
+        font-size: 17px;
+        letter-spacing: .5px;
+    }
+
+    .landing-header p {
+        font-size: 11px;
+        letter-spacing: 1px;
+    }
+
+    .lane-form {
+        padding: 10px 6px;
+    }
+
+    .lane-form h2 {
+        font-size: 15px;
+        margin-bottom: 9px;
+    }
+
+    .lane-btn {
+        padding: 10px;
+        font-size: 11px;
+    }
+}
+
+@media (max-width: 320px) {
+    .landing-container {
+        padding-inline: 18px;
+    }
+
+    .landing-card {
+        padding-inline: 5px;
+    }
+
+    .logo-wrapper {
+        width: 48px;
+        height: 48px;
+    }
+
+    .landing-header h1 {
+        font-size: 16px;
+    }
+}
