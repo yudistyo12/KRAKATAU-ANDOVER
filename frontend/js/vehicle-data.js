@@ -20,6 +20,13 @@ const VehicleState = {
         lon: document.getElementById('data-lon')
     },
 
+    formatValue(value, decimals, suffix = '') {
+        const number = Number(value);
+        return Number.isFinite(number)
+            ? `${number.toFixed(decimals)}${suffix}`
+            : '--';
+    },
+
     async fetch() {
         if (this.fetchInProgress) return;
         this.fetchInProgress = true;
@@ -37,12 +44,12 @@ const VehicleState = {
             const data = await res.json();
             this.data = data;
 
-            if (this.dom.speed) this.dom.speed.textContent = `${Number(data.speed || 0).toFixed(1)} m/s`;
-            if (this.dom.course) this.dom.course.textContent = `${Number(data.course || 0).toFixed(1)} °`;
-            if (this.dom.lat) this.dom.lat.textContent = Number(data.lat || 0).toFixed(6);
-            if (this.dom.lon) this.dom.lon.textContent = Number(data.lon || 0).toFixed(6);
+            if (this.dom.speed) this.dom.speed.textContent = this.formatValue(data.speed, 1, ' m/s');
+            if (this.dom.course) this.dom.course.textContent = this.formatValue(data.course, 1, ' °');
+            if (this.dom.lat) this.dom.lat.textContent = this.formatValue(data.lat, 6);
+            if (this.dom.lon) this.dom.lon.textContent = this.formatValue(data.lon, 6);
 
-            if (data.fix && Number(data.lat || 0) !== 0 && Number(data.lon || 0) !== 0) {
+            if (data.fix && Number.isFinite(Number(data.lat)) && Number.isFinite(Number(data.lon))) {
                 const currentLat = Number(data.lat);
                 const currentLon = Number(data.lon);
                 const lastPoint = this.pathHistory[this.pathHistory.length - 1];

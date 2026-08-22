@@ -8,6 +8,8 @@ import threading
 
 from flask import Flask, Response, send_from_directory, abort, jsonify
 
+from gps import get_gps_data
+
 
 # =========================================================
 # CONFIG
@@ -469,6 +471,40 @@ def _add_cors_headers(response):
 
 
 # =========================================================
+# GPS TELEMETRY
+# =========================================================
+
+@app.route(
+    "/telemetry"
+)
+def telemetry():
+
+    data = get_gps_data()
+    speed_knots = data["speed_knots"]
+
+    response = jsonify({
+        "lat": data["latitude"],
+        "lon": data["longitude"],
+        "speed": (
+            speed_knots * 0.514444
+            if speed_knots is not None
+            else None
+        ),
+        "course": data["course"],
+        "fix": data["fix"],
+        "speed_knots": speed_knots,
+        "speed_kmh": data["speed_kmh"],
+        "timestamp": data["timestamp"]
+    })
+
+    response.headers[
+        "Cache-Control"
+    ] = "no-store"
+
+    return response
+
+
+# =========================================================
 # MJPEG GENERATOR
 # =========================================================
 
@@ -703,6 +739,32 @@ def _run_flask():
     )
 
 
+def start_web_server():
+
+    global _flask_thread
+
+    if (
+        _flask_thread is None
+        or not _flask_thread.is_alive()
+    ):
+
+        _flask_thread = threading.Thread(
+
+            target=_run_flask,
+
+            daemon=True,
+
+            name="Flask-Streaming"
+        )
+
+        _flask_thread.start()
+
+        print(
+            f"Web API aktif di "
+            f"http://<IP_JETSON>:{STREAM_PORT}/"
+        )
+
+
 # =========================================================
 # START STREAMING
 # =========================================================
@@ -726,33 +788,7 @@ def start_streaming():
 
     _underwater_grabber.start()
 
-    if (
-        _flask_thread is None
-        or not _flask_thread.is_alive()
-    ):
-
-        _flask_thread = threading.Thread(
-
-            target=_run_flask,
-
-            daemon=True,
-
-            name="Flask-Streaming"
-        )
-
-        _flask_thread.start()
-
-        print(
-            f"Web stream aktif di "
-            f"http://<IP_JETSON>:{STREAM_PORT}/"
-        )
-
-    else:
-
-        print(
-            "Web streaming Flask "
-            "sudah berjalan"
-        )
+    start_web_server()
 
 
 # =========================================================

@@ -4,7 +4,11 @@
 import serial
 import time
 
-from video_stream import start_streaming, stop_streaming
+from video_stream import (
+    start_streaming,
+    stop_streaming,
+    start_web_server
+)
 from video_stream import capture_surface_photo, capture_underwater_photo
 
 from gps import start_gps_reader, stop_gps_reader, get_gps_data
@@ -528,6 +532,7 @@ def main():
 
         print("Membuka GPS reader (background thread)...")
         start_gps_reader()
+        start_web_server()
         print()
 
         while True:
