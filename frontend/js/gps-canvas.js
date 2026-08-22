@@ -49,7 +49,7 @@ const GPSRenderer = {
         const lane = window.GCSApp ? window.GCSApp.getCurrentLane() : 'A';
 
         ctx.clearRect(0, 0, W, H);
-        ctx.fillStyle = 'rgba(237, 236, 243, 0.72)';
+        ctx.fillStyle = 'rgba(246, 245, 250, 0.9)';
         ctx.fillRect(0, 0, W, H);
 
         const COL_W = Math.min(100, (W - 80) / 4);
