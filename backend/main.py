@@ -7,6 +7,8 @@ import time
 from video_stream import start_streaming, stop_streaming
 from video_stream import capture_surface_photo, capture_underwater_photo
 
+from gps import start_gps_reader, stop_gps_reader, get_gps_data
+
 
 # =========================================================
 # CONFIG
@@ -524,6 +526,10 @@ def main():
         print("CASE 1 = AUTO")
         print()
 
+        print("Membuka GPS reader (background thread)...")
+        start_gps_reader()
+        print()
+
         while True:
             while ser.in_waiting:
                 line = ser.readline().decode(
@@ -570,6 +576,13 @@ def main():
             print("Camera streaming dihentikan.")
         except Exception as e:
             print(f"WARNING: gagal menghentikan streaming: {e}")
+
+        try:
+            print("Menghentikan GPS reader...")
+            stop_gps_reader()
+            print("GPS reader dihentikan.")
+        except Exception as e:
+            print(f"WARNING: gagal menghentikan GPS reader: {e}")
 
         if ser is not None:
             try:
