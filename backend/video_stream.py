@@ -490,7 +490,8 @@ def telemetry():
             if speed_knots is not None
             else None
         ),
-        "course": data["course"],
+        "course": data["course"] if data["course"] is not None else data["heading"],
+        "heading": data["heading"],
         "fix": data["fix"],
         "speed_knots": speed_knots,
         "speed_kmh": data["speed_kmh"],

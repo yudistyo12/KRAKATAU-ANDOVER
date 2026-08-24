@@ -40,6 +40,30 @@ const GPSRenderer = {
         return this.plotTop + ((this.maxLat - lat) / (this.maxLat - this.minLat)) * (H - this.plotTop - this.plotBottom);
     },
 
+    fitToVehiclePath() {
+        const pathHistory = window.VehicleState ? window.VehicleState.pathHistory : [];
+        const telemetry = window.VehicleState ? window.VehicleState.data : null;
+        const points = pathHistory.filter(point => Number.isFinite(point.lat) && Number.isFinite(point.lon));
+
+        if (telemetry && telemetry.fix && Number.isFinite(Number(telemetry.lat)) && Number.isFinite(Number(telemetry.lon))) {
+            points.push({ lat: Number(telemetry.lat), lon: Number(telemetry.lon) });
+        }
+
+        if (!points.length) return;
+
+        const latitudes = points.map(point => point.lat);
+        const longitudes = points.map(point => point.lon);
+        const latRange = Math.max(Math.max(...latitudes) - Math.min(...latitudes), 0.00001);
+        const lonRange = Math.max(Math.max(...longitudes) - Math.min(...longitudes), 0.00001);
+        const latPadding = latRange * 0.2;
+        const lonPadding = lonRange * 0.2;
+
+        this.minLat = Math.min(...latitudes) - latPadding;
+        this.maxLat = Math.max(...latitudes) + latPadding;
+        this.minLon = Math.min(...longitudes) - lonPadding;
+        this.maxLon = Math.max(...longitudes) + lonPadding;
+    },
+
     draw() {
         if (!this.canvas || !this.ctx) return;
         const ctx = this.ctx;
@@ -61,6 +85,7 @@ const GPSRenderer = {
         this.plotRight = MARGIN_L - 20;
         this.plotTop = MARGIN_T;
         this.plotBottom = H - (MARGIN_T + ROW_H * 4);
+        this.fitToVehiclePath();
 
         const cx = col => MARGIN_L + col * COL_W;
         const ry = row => MARGIN_T + (5 - row) * ROW_H;
@@ -210,7 +235,7 @@ const GPSRenderer = {
 
         // Actual Trajectory
         const pathHistory = window.VehicleState ? window.VehicleState.pathHistory : [];
-        if (pathHistory && pathHistory.length > 1) {
+        if (pathHistory && pathHistory.length > 0) {
             ctx.beginPath();
             ctx.strokeStyle = 'rgba(30, 64, 175, 0.6)';
             ctx.lineWidth = 2;
@@ -222,15 +247,24 @@ const GPSRenderer = {
                 if (idx === 0) ctx.moveTo(x, y);
                 else ctx.lineTo(x, y);
             });
-            ctx.stroke();
+            if (pathHistory.length > 1) ctx.stroke();
             ctx.setLineDash([]);
+
+            pathHistory.forEach(pt => {
+                const x = this.mapLonToX(pt.lon, W);
+                const y = this.mapLatToY(pt.lat, H);
+                ctx.beginPath();
+                ctx.arc(x, y, 3, 0, Math.PI * 2);
+                ctx.fillStyle = '#1e40af';
+                ctx.fill();
+            });
         }
 
         // Ship Icon & Heading
         const tel = window.VehicleState ? window.VehicleState.data : null;
         let shipX, shipY;
 
-        if (tel && Number(tel.lat || 0) !== 0) {
+        if (tel && tel.fix && Number.isFinite(Number(tel.lat)) && Number.isFinite(Number(tel.lon))) {
             shipX = this.mapLonToX(Number(tel.lon || 0), W);
             shipY = this.mapLatToY(Number(tel.lat || 0), H);
         } else {
@@ -243,8 +277,9 @@ const GPSRenderer = {
         ctx.textBaseline = 'middle';
         ctx.fillText('🚢', shipX, shipY);
 
-        if (tel && tel.course !== undefined && Number(tel.lat || 0) !== 0) {
-            const courseRad = (Number(tel.course) - 90) * (Math.PI / 180);
+        const heading = tel ? (tel.heading ?? tel.course) : null;
+        if (tel && Number.isFinite(Number(heading)) && tel.fix && Number.isFinite(Number(tel.lat)) && Number.isFinite(Number(tel.lon))) {
+            const courseRad = (Number(heading) - 90) * (Math.PI / 180);
             const len = 25;
             ctx.beginPath();
             ctx.moveTo(shipX, shipY);

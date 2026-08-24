@@ -47,9 +47,6 @@ const GCSApp = {
         CameraManager.init();
         GPSRenderer.init();
 
-        VehicleState.fetch();
-        setInterval(() => VehicleState.fetch(), CONFIG.POLL_INTERVALS.TELEMETRY);
-
         CameraManager.refreshLatestSnapshots();
         setInterval(() => CameraManager.refreshLatestSnapshots(), CONFIG.POLL_INTERVALS.SNAPSHOTS);
     }

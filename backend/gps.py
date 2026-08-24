@@ -24,6 +24,7 @@ gps_data = {
     "speed_knots": None,
     "speed_kmh": None,
     "course": None,
+    "heading": None,
     "satellites": None,
     "hdop": None,
     "fix": False,
@@ -94,7 +95,7 @@ def parse_nmea(line):
                     gps_data["latitude"] = msg.latitude
                     gps_data["longitude"] = msg.longitude
 
-                if msg.spd_over_grnd is not None:
+                if msg.spd_over_grnd not in (None, ""):
 
                     speed_knots = float(msg.spd_over_grnd)
 
@@ -103,7 +104,7 @@ def parse_nmea(line):
                     # knot -> km/h
                     gps_data["speed_kmh"] = speed_knots * 1.852
 
-                if msg.true_course is not None:
+                if msg.true_course not in (None, ""):
                     gps_data["course"] = float(msg.true_course)
 
                 gps_data["timestamp"] = str(msg.timestamp)
@@ -121,6 +122,12 @@ def get_gps_data():
     """Kembalikan salinan snapshot data GPS terbaru (thread-safe)."""
     with _gps_lock:
         return dict(gps_data)
+
+
+def set_heading(heading):
+    """Simpan heading kompas terbaru agar tersedia untuk telemetry web."""
+    with _gps_lock:
+        gps_data["heading"] = float(heading)
 
 
 # =========================================================

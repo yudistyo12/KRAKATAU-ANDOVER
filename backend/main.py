@@ -11,7 +11,7 @@ from video_stream import (
 )
 from video_stream import capture_surface_photo, capture_underwater_photo
 
-from gps import start_gps_reader, stop_gps_reader, get_gps_data
+from gps import start_gps_reader, stop_gps_reader, get_gps_data, set_heading
 
 
 # =========================================================
@@ -417,6 +417,7 @@ def read_heading(line, ser):
         data = line.split("HEADING=", 1)[1]
         data = data.split(",", 1)[0]
         heading = float(data)
+        set_heading(heading)
     except ValueError:
         return
 
