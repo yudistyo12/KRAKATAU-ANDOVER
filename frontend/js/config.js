@@ -4,7 +4,7 @@
 const API_BASE_URL = "http://192.168.1.102:5001";
 
 const CONFIG = {
-    //TELEMETRY: `${API_BASE_URL}/telemetry`,
+    TELEMETRY: `${API_BASE_URL}/telemetry`,
     CAMERA: {
         SURFACE: `${API_BASE_URL}/surface_feed`,
         UNDERWATER: `${API_BASE_URL}/underwater_feed`
