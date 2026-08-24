@@ -40,30 +40,6 @@ const GPSRenderer = {
         return this.plotTop + ((this.maxLat - lat) / (this.maxLat - this.minLat)) * (H - this.plotTop - this.plotBottom);
     },
 
-    fitToVehiclePath() {
-        const pathHistory = window.VehicleState ? window.VehicleState.pathHistory : [];
-        const telemetry = window.VehicleState ? window.VehicleState.data : null;
-        const points = pathHistory.filter(point => Number.isFinite(point.lat) && Number.isFinite(point.lon));
-
-        if (telemetry && telemetry.fix && Number.isFinite(Number(telemetry.lat)) && Number.isFinite(Number(telemetry.lon))) {
-            points.push({ lat: Number(telemetry.lat), lon: Number(telemetry.lon) });
-        }
-
-        if (!points.length) return;
-
-        const latitudes = points.map(point => point.lat);
-        const longitudes = points.map(point => point.lon);
-        const latRange = Math.max(Math.max(...latitudes) - Math.min(...latitudes), 0.00001);
-        const lonRange = Math.max(Math.max(...longitudes) - Math.min(...longitudes), 0.00001);
-        const latPadding = latRange * 0.2;
-        const lonPadding = lonRange * 0.2;
-
-        this.minLat = Math.min(...latitudes) - latPadding;
-        this.maxLat = Math.max(...latitudes) + latPadding;
-        this.minLon = Math.min(...longitudes) - lonPadding;
-        this.maxLon = Math.max(...longitudes) + lonPadding;
-    },
-
     draw() {
         if (!this.canvas || !this.ctx) return;
         const ctx = this.ctx;
@@ -85,7 +61,6 @@ const GPSRenderer = {
         this.plotRight = MARGIN_L - 20;
         this.plotTop = MARGIN_T;
         this.plotBottom = H - (MARGIN_T + ROW_H * 4);
-        this.fitToVehiclePath();
 
         const cx = col => MARGIN_L + col * COL_W;
         const ry = row => MARGIN_T + (5 - row) * ROW_H;
@@ -234,7 +209,7 @@ const GPSRenderer = {
         ctx.restore();
 
         // Actual Trajectory
-        const pathHistory = window.VehicleState ? window.VehicleState.pathHistory : [];
+        const pathHistory = window.GPSData ? window.GPSData.pathHistory : [];
         if (pathHistory && pathHistory.length > 0) {
             ctx.beginPath();
             ctx.strokeStyle = 'rgba(30, 64, 175, 0.6)';
@@ -261,12 +236,13 @@ const GPSRenderer = {
         }
 
         // Ship Icon & Heading
-        const tel = window.VehicleState ? window.VehicleState.data : null;
+        const tel = window.GPSData ? window.GPSData.data : null;
+        const position = window.GPSData ? window.GPSData.position : null;
         let shipX, shipY;
 
-        if (tel && tel.fix && Number.isFinite(Number(tel.lat)) && Number.isFinite(Number(tel.lon))) {
-            shipX = this.mapLonToX(Number(tel.lon || 0), W);
-            shipY = this.mapLatToY(Number(tel.lat || 0), H);
+        if (tel && tel.fix && position && Number.isFinite(position.lat) && Number.isFinite(position.lon)) {
+            shipX = this.mapLonToX(position.lon, W);
+            shipY = this.mapLatToY(position.lat, H);
         } else {
             shipX = lane === 'A' ? cx(4) : cx(0);
             shipY = ry(1) + 10;
@@ -278,7 +254,7 @@ const GPSRenderer = {
         ctx.fillText('🚢', shipX, shipY);
 
         const heading = tel ? (tel.heading ?? tel.course) : null;
-        if (tel && Number.isFinite(Number(heading)) && tel.fix && Number.isFinite(Number(tel.lat)) && Number.isFinite(Number(tel.lon))) {
+        if (tel && Number.isFinite(Number(heading)) && tel.fix && position && Number.isFinite(position.lat) && Number.isFinite(position.lon)) {
             const courseRad = (Number(heading) - 90) * (Math.PI / 180);
             const len = 25;
             ctx.beginPath();
@@ -287,6 +263,20 @@ const GPSRenderer = {
             ctx.strokeStyle = '#79c0ff';
             ctx.lineWidth = 3;
             ctx.stroke();
+        }
+
+        // COG shows the actual movement direction, including reverse motion.
+        if (tel && Number.isFinite(Number(tel.course)) && tel.fix && position && Number.isFinite(position.lat) && Number.isFinite(position.lon)) {
+            const movementRad = (Number(tel.course) - 90) * (Math.PI / 180);
+            const movementLength = 16;
+            ctx.beginPath();
+            ctx.moveTo(shipX, shipY);
+            ctx.lineTo(shipX + Math.cos(movementRad) * movementLength, shipY + Math.sin(movementRad) * movementLength);
+            ctx.strokeStyle = '#f59e0b';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([3, 3]);
+            ctx.stroke();
+            ctx.setLineDash([]);
         }
 
         ctx.fillStyle = '#6B5C52';

@@ -13,6 +13,35 @@ const GPSData = {
     pathHistory: [],
     MAX_PATH_LENGTH: 200,
     fetchInProgress: false,
+    position: null,
+    targetPosition: null,
+    animationFrame: null,
+
+    animateToPosition(position) {
+        const startPosition = this.position || position;
+        const startTime = performance.now();
+        const duration = Math.min(CONFIG.POLL_INTERVALS.TELEMETRY * 0.9, 900);
+
+        this.targetPosition = position;
+
+        const animate = currentTime => {
+            const progress = Math.min((currentTime - startTime) / duration, 1);
+            const easedProgress = 1 - Math.pow(1 - progress, 3);
+
+            this.position = {
+                lat: startPosition.lat + (position.lat - startPosition.lat) * easedProgress,
+                lon: startPosition.lon + (position.lon - startPosition.lon) * easedProgress
+            };
+
+            if (window.GPSRenderer) window.GPSRenderer.draw();
+
+            if (progress < 1) this.animationFrame = requestAnimationFrame(animate);
+            else this.animationFrame = null;
+        };
+
+        if (this.animationFrame) cancelAnimationFrame(this.animationFrame);
+        this.animationFrame = requestAnimationFrame(animate);
+    },
 
     async fetch() {
         if (this.fetchInProgress) return;
@@ -36,6 +65,7 @@ const GPSData = {
                     lat: Number(data.lat),
                     lon: Number(data.lon)
                 };
+                this.animateToPosition(point);
                 const lastPoint = this.pathHistory[this.pathHistory.length - 1];
 
                 if (!lastPoint || lastPoint.lat !== point.lat || lastPoint.lon !== point.lon) {
