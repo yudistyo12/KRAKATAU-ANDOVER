@@ -10,7 +10,8 @@ from datetime import datetime
 PORT = "/dev/ttyACM0"
 BAUDRATE = 115200
 
-CSV_FILE = "waypoint.csv"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CSV_FILE = os.path.join(BASE_DIR, "waypoint.csv")
 
 # Channel IBUS
 CH_MARK_WP = 10

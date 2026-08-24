@@ -4,6 +4,7 @@ import serial
 import pynmea2
 import threading
 import time
+import re
 
 # =========================================================
 # CONFIG
@@ -52,7 +53,7 @@ def parse_nmea(line):
         # Posisi + altitude + satellite + HDOP
         # -------------------------------------------------
 
-        if line.startswith("$GPGGA") or line.startswith("$GNGGA"):
+        if re.match(r"^\$..GGA(?:,|\*)", line):
 
             msg = pynmea2.parse(line)
 
@@ -82,7 +83,7 @@ def parse_nmea(line):
         # Speed + Course
         # -------------------------------------------------
 
-        elif line.startswith("$GPRMC") or line.startswith("$GNRMC"):
+        elif re.match(r"^\$..RMC(?:,|\*)", line):
 
             msg = pynmea2.parse(line)
 

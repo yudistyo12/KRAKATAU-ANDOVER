@@ -10,16 +10,6 @@ from flask import Flask, Response, send_from_directory, abort, jsonify
 
 from gps import get_gps_data
 
-# =========================================================
-# IMPORT HEARTBEAT DARI MAIN
-# =========================================================
-try:
-    from main import update_gcs_heartbeat
-except ImportError:
-    # Fallback dummy agar video_stream tetap bisa di-test mandiri
-    def update_gcs_heartbeat():
-        pass
-
 
 # =========================================================
 # CONFIG
@@ -269,7 +259,11 @@ def _add_cors_headers(response):
 
 @app.route("/ping_gcs", methods=["POST", "OPTIONS"])
 def ping_gcs():
-    update_gcs_heartbeat()
+    try:
+        from main import update_gcs_heartbeat
+        update_gcs_heartbeat()
+    except ImportError:
+        pass
     return jsonify({"status": "ok"}), 200
 
 
@@ -280,22 +274,24 @@ def ping_gcs():
 @app.route("/telemetry")
 def telemetry():
     data = get_gps_data()
-    speed_knots = data["speed_knots"]
+    speed_knots = data.get("speed_knots")
+    course = data.get("course")
+    heading = data.get("heading")
 
     response = jsonify({
-        "lat": data["latitude"],
-        "lon": data["longitude"],
+        "lat": data.get("latitude"),
+        "lon": data.get("longitude"),
         "speed": (
             speed_knots * 0.514444
             if speed_knots is not None
             else None
         ),
-        "course": data["course"] if data["course"] is not None else data["heading"],
-        "heading": data["heading"],
-        "fix": data["fix"],
+        "course": course if course is not None else heading,
+        "heading": heading,
+        "fix": data.get("fix", False),
         "speed_knots": speed_knots,
-        "speed_kmh": data["speed_kmh"],
-        "timestamp": data["timestamp"]
+        "speed_kmh": data.get("speed_kmh"),
+        "timestamp": data.get("timestamp")
     })
 
     response.headers["Cache-Control"] = "no-store"

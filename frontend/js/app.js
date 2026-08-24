@@ -33,7 +33,7 @@ const GCSApp = {
     startHeartbeat() {
         setInterval(() => {
             // Mengirim ping ke endpoint Python Flask
-            fetch('/ping_gcs', { method: 'POST' })
+            fetch(`${CONFIG.API_BASE_URL}/ping_gcs`, { method: 'POST' })
                 .catch(err => console.warn("GCS Heartbeat error:", err));
         }, 300); // Kirim sinyal ping tiap 300ms
     },
