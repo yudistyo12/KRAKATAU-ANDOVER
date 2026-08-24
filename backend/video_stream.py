@@ -286,7 +286,7 @@ def telemetry():
             if speed_knots is not None
             else None
         ),
-        "course": course if course is not None else heading,
+        "course": course,
         "heading": heading,
         "fix": data.get("fix", False),
         "speed_knots": speed_knots,

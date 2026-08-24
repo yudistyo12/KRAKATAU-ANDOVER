@@ -23,13 +23,13 @@ const GPSData = {
         const elapsed = this.lastMotionTime === null
             ? 0
             : Math.min((now - this.lastMotionTime) / 1000, 1);
-        const movementHeading = Number(data.course ?? data.heading);
+        const movementHeading = Number(data.course);
         const speed = Math.max(Number(data.speed) || 0, 0);
 
         if (!this.visualPosition) {
             const lane = new URLSearchParams(window.location.search).get('lane');
             this.visualPosition = { x: lane === 'B' ? 0.12 : 0.88, y: 0.82 };
-        } else if (Number.isFinite(movementHeading) && speed > 0 && elapsed > 0) {
+        } else if (data.fix && Number.isFinite(movementHeading) && speed > 0 && elapsed > 0) {
             const movementRadians = movementHeading * Math.PI / 180;
             const movement = Math.min(speed * elapsed * 0.0025, 0.004);
             this.visualPosition.x += Math.sin(movementRadians) * movement;
