@@ -293,7 +293,7 @@ const GPSRenderer = {
         }
 
         // COG shows the actual movement direction, including reverse motion.
-        if (tel && Number.isFinite(Number(tel.course)) && tel.fix && position && Number.isFinite(position.lat) && Number.isFinite(position.lon)) {
+        if (tel && Number.isFinite(Number(tel.course)) && tel.fix && visualPosition && Number.isFinite(visualPosition.x) && Number.isFinite(visualPosition.y)) {
             const movementRad = (Number(tel.course) - 90) * (Math.PI / 180);
             const movementLength = 16;
             ctx.beginPath();
