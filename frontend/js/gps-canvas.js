@@ -248,14 +248,37 @@ const GPSRenderer = {
             shipY = ry(1) + 10;
         }
 
-        ctx.font = '24px Arial, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('🚢', shipX, shipY);
-
         const heading = tel ? (tel.heading ?? tel.course) : null;
+        const headingDegrees = Number(heading);
+        const headingRadians = Number.isFinite(headingDegrees)
+            ? (headingDegrees - 90) * (Math.PI / 180)
+            : 0;
+
+        // Draw the vessel with canvas primitives so it works without emoji fonts.
+        ctx.save();
+        ctx.translate(shipX, shipY);
+        ctx.rotate(headingRadians);
+        ctx.beginPath();
+        ctx.moveTo(16, 0);
+        ctx.lineTo(7, -8);
+        ctx.lineTo(-12, -8);
+        ctx.lineTo(-16, 0);
+        ctx.lineTo(-12, 8);
+        ctx.lineTo(7, 8);
+        ctx.closePath();
+        ctx.fillStyle = '#0f766e';
+        ctx.fill();
+        ctx.strokeStyle = '#083344';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(-7, -5, 9, 10);
+        ctx.fillStyle = '#f59e0b';
+        ctx.fillRect(2, -3, 5, 6);
+        ctx.restore();
+
         if (tel && Number.isFinite(Number(heading)) && tel.fix && position && Number.isFinite(position.lat) && Number.isFinite(position.lon)) {
-            const courseRad = (Number(heading) - 90) * (Math.PI / 180);
+            const courseRad = headingRadians;
             const len = 25;
             ctx.beginPath();
             ctx.moveTo(shipX, shipY);
