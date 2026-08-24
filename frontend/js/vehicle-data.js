@@ -20,6 +20,7 @@ const VehicleState = {
     },
 
     formatValue(value, decimals, suffix = '') {
+        if (value === null || value === undefined || value === '') return '--';
         const number = Number(value);
         return Number.isFinite(number)
             ? `${number.toFixed(decimals)}${suffix}`
