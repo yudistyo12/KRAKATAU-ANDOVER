@@ -16,7 +16,15 @@ const GPSData = {
     visualPosition: null,
     visualHistory: [],
     lastMotionTime: null,
+    lastMode: null,
     animationFrame: null,
+
+    resetVisualPosition() {
+        const lane = new URLSearchParams(window.location.search).get('lane');
+        this.visualPosition = { x: lane === 'B' ? 0.12 : 0.88, y: 0.82 };
+        this.visualHistory = [{ ...this.visualPosition }];
+        this.lastMotionTime = performance.now();
+    },
 
     updateVisualMotion(data) {
         const now = performance.now();
@@ -27,8 +35,8 @@ const GPSData = {
         const speed = Math.max(Number(data.speed) || 0, 0);
 
         if (!this.visualPosition) {
-            const lane = new URLSearchParams(window.location.search).get('lane');
-            this.visualPosition = { x: lane === 'B' ? 0.12 : 0.88, y: 0.82 };
+            this.resetVisualPosition();
+            return;
         } else if (data.fix && Number.isFinite(movementHeading) && speed > 0 && elapsed > 0) {
             const movementRadians = movementHeading * Math.PI / 180;
             const movement = Math.min(speed * elapsed * 0.0025, 0.004);
@@ -62,6 +70,10 @@ const GPSData = {
 
             const data = await response.json();
             this.data = data;
+
+            const modeChangedToAuto = data.mode === 'AUTO' && this.lastMode !== 'AUTO';
+            if (modeChangedToAuto) this.resetVisualPosition();
+            this.lastMode = data.mode || this.lastMode;
             this.updateVisualMotion(data);
 
             if (data.fix && Number.isFinite(Number(data.lat)) && Number.isFinite(Number(data.lon))) {

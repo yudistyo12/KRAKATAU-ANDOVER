@@ -277,6 +277,13 @@ def telemetry():
     speed_knots = data.get("speed_knots")
     course = data.get("course")
     heading = data.get("heading")
+    mode = "MANUAL"
+
+    try:
+        from main import current_case, CASE_AUTO
+        mode = "AUTO" if current_case == CASE_AUTO else "MANUAL"
+    except ImportError:
+        pass
 
     response = jsonify({
         "lat": data.get("latitude"),
@@ -288,6 +295,7 @@ def telemetry():
         ),
         "course": course,
         "heading": heading,
+        "mode": mode,
         "fix": data.get("fix", False),
         "speed_knots": speed_knots,
         "speed_kmh": data.get("speed_kmh"),
