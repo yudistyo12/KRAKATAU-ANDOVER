@@ -209,7 +209,7 @@ const GPSRenderer = {
         ctx.restore();
 
         // Actual Trajectory
-        const pathHistory = window.GPSData ? window.GPSData.pathHistory : [];
+        const pathHistory = window.GPSData ? window.GPSData.visualHistory : [];
         if (pathHistory && pathHistory.length > 0) {
             ctx.beginPath();
             ctx.strokeStyle = 'rgba(30, 64, 175, 0.6)';
@@ -217,8 +217,8 @@ const GPSRenderer = {
             ctx.setLineDash([6, 4]);
 
             pathHistory.forEach((pt, idx) => {
-                const x = this.mapLonToX(pt.lon, W);
-                const y = this.mapLatToY(pt.lat, H);
+                const x = MARGIN_L + pt.x * COL_W * 4;
+                const y = MARGIN_T + (1 - pt.y) * ROW_H * 4;
                 if (idx === 0) ctx.moveTo(x, y);
                 else ctx.lineTo(x, y);
             });
@@ -226,8 +226,8 @@ const GPSRenderer = {
             ctx.setLineDash([]);
 
             pathHistory.forEach(pt => {
-                const x = this.mapLonToX(pt.lon, W);
-                const y = this.mapLatToY(pt.lat, H);
+                const x = MARGIN_L + pt.x * COL_W * 4;
+                const y = MARGIN_T + (1 - pt.y) * ROW_H * 4;
                 ctx.beginPath();
                 ctx.arc(x, y, 3, 0, Math.PI * 2);
                 ctx.fillStyle = '#1e40af';
@@ -237,16 +237,20 @@ const GPSRenderer = {
 
         // Ship Icon & Heading
         const tel = window.GPSData ? window.GPSData.data : null;
-        const position = window.GPSData ? window.GPSData.position : null;
+        const visualPosition = window.GPSData ? window.GPSData.visualPosition : null;
         let shipX, shipY;
 
-        if (tel && tel.fix && position && Number.isFinite(position.lat) && Number.isFinite(position.lon)) {
-            shipX = this.mapLonToX(position.lon, W);
-            shipY = this.mapLatToY(position.lat, H);
+        if (visualPosition && Number.isFinite(visualPosition.x) && Number.isFinite(visualPosition.y)) {
+            shipX = MARGIN_L + visualPosition.x * COL_W * 4;
+            shipY = MARGIN_T + (1 - visualPosition.y) * ROW_H * 4;
         } else {
             shipX = lane === 'A' ? cx(4) : cx(0);
             shipY = ry(1) + 10;
         }
+
+        // Keep the vessel visible while a GPS fix is acquired or restored.
+        shipX = Math.max(18, Math.min(W - 18, shipX));
+        shipY = Math.max(18, Math.min(H - 18, shipY));
 
         const heading = tel ? (tel.heading ?? tel.course) : null;
         const headingDegrees = Number(heading);
@@ -277,7 +281,7 @@ const GPSRenderer = {
         ctx.fillRect(2, -3, 5, 6);
         ctx.restore();
 
-        if (tel && Number.isFinite(Number(heading)) && tel.fix && position && Number.isFinite(position.lat) && Number.isFinite(position.lon)) {
+        if (tel && Number.isFinite(Number(heading)) && visualPosition) {
             const courseRad = headingRadians;
             const len = 25;
             ctx.beginPath();

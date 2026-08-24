@@ -13,34 +13,37 @@ const GPSData = {
     pathHistory: [],
     MAX_PATH_LENGTH: 200,
     fetchInProgress: false,
-    position: null,
-    targetPosition: null,
+    visualPosition: null,
+    visualHistory: [],
+    lastMotionTime: null,
     animationFrame: null,
 
-    animateToPosition(position) {
-        const startPosition = this.position || position;
-        const startTime = performance.now();
-        const duration = Math.min(CONFIG.POLL_INTERVALS.TELEMETRY * 0.9, 900);
+    updateVisualMotion(data) {
+        const now = performance.now();
+        const elapsed = this.lastMotionTime === null
+            ? 0
+            : Math.min((now - this.lastMotionTime) / 1000, 1);
+        const heading = Number(data.heading ?? data.course);
+        const speed = Math.max(Number(data.speed) || 0, 0);
 
-        this.targetPosition = position;
+        if (!this.visualPosition) {
+            const lane = new URLSearchParams(window.location.search).get('lane');
+            this.visualPosition = { x: lane === 'B' ? 0.12 : 0.88, y: 0.82 };
+        } else if (Number.isFinite(heading) && speed > 0 && elapsed > 0) {
+            const headingRadians = heading * Math.PI / 180;
+            const movement = Math.min(speed * elapsed * 0.012, 0.025);
+            this.visualPosition.x += Math.sin(headingRadians) * movement;
+            this.visualPosition.y -= Math.cos(headingRadians) * movement;
+            this.visualPosition.x = Math.max(0.04, Math.min(0.96, this.visualPosition.x));
+            this.visualPosition.y = Math.max(0.08, Math.min(0.92, this.visualPosition.y));
+        }
 
-        const animate = currentTime => {
-            const progress = Math.min((currentTime - startTime) / duration, 1);
-            const easedProgress = 1 - Math.pow(1 - progress, 3);
-
-            this.position = {
-                lat: startPosition.lat + (position.lat - startPosition.lat) * easedProgress,
-                lon: startPosition.lon + (position.lon - startPosition.lon) * easedProgress
-            };
-
-            if (window.GPSRenderer) window.GPSRenderer.draw();
-
-            if (progress < 1) this.animationFrame = requestAnimationFrame(animate);
-            else this.animationFrame = null;
-        };
-
-        if (this.animationFrame) cancelAnimationFrame(this.animationFrame);
-        this.animationFrame = requestAnimationFrame(animate);
+        this.lastMotionTime = now;
+        const lastVisualPoint = this.visualHistory[this.visualHistory.length - 1];
+        if (!lastVisualPoint || lastVisualPoint.x !== this.visualPosition.x || lastVisualPoint.y !== this.visualPosition.y) {
+            this.visualHistory.push({ ...this.visualPosition });
+            if (this.visualHistory.length > this.MAX_PATH_LENGTH) this.visualHistory.shift();
+        }
     },
 
     async fetch() {
@@ -59,13 +62,13 @@ const GPSData = {
 
             const data = await response.json();
             this.data = data;
+            this.updateVisualMotion(data);
 
             if (data.fix && Number.isFinite(Number(data.lat)) && Number.isFinite(Number(data.lon))) {
                 const point = {
                     lat: Number(data.lat),
                     lon: Number(data.lon)
                 };
-                this.animateToPosition(point);
                 const lastPoint = this.pathHistory[this.pathHistory.length - 1];
 
                 if (!lastPoint || lastPoint.lat !== point.lat || lastPoint.lon !== point.lon) {
@@ -87,6 +90,7 @@ const GPSData = {
 
     clearPath() {
         this.pathHistory = [];
+        this.visualHistory = this.visualPosition ? [{ ...this.visualPosition }] : [];
         if (window.VehicleState) window.VehicleState.pathHistory = this.pathHistory;
         if (window.GPSRenderer) window.GPSRenderer.draw();
     }
