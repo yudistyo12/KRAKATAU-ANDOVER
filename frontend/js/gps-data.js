@@ -16,31 +16,28 @@ const GPSData = {
     visualPosition: null,
     visualHistory: [],
     lastMotionTime: null,
-    animationFrame: null,
 
     updateVisualMotion(data) {
         const now = performance.now();
-        const elapsed = this.lastMotionTime === null
-            ? 0
-            : Math.min((now - this.lastMotionTime) / 1000, 1);
+        const elapsed = this.lastMotionTime === null ? 0 : Math.min((now - this.lastMotionTime) / 1000, 1);
         const heading = Number(data.heading ?? data.course);
-        const speed = Math.max(Number(data.speed) || 0, 0);
+        const speed = Number(data.motor_speed_mps ?? data.speed) || 0;
 
         if (!this.visualPosition) {
             const lane = new URLSearchParams(window.location.search).get('lane');
             this.visualPosition = { x: lane === 'B' ? 0.12 : 0.88, y: 0.82 };
-        } else if (Number.isFinite(heading) && speed > 0 && elapsed > 0) {
-            const headingRadians = heading * Math.PI / 180;
-            const movement = Math.min(speed * elapsed * 0.012, 0.025);
-            this.visualPosition.x += Math.sin(headingRadians) * movement;
-            this.visualPosition.y -= Math.cos(headingRadians) * movement;
+        } else if (Number.isFinite(heading) && elapsed > 0 && speed !== 0) {
+            const radians = heading * Math.PI / 180;
+            const movement = Math.max(-0.025, Math.min(0.025, speed * elapsed * 0.012));
+            this.visualPosition.x += Math.sin(radians) * movement;
+            this.visualPosition.y -= Math.cos(radians) * movement;
             this.visualPosition.x = Math.max(0.04, Math.min(0.96, this.visualPosition.x));
             this.visualPosition.y = Math.max(0.08, Math.min(0.92, this.visualPosition.y));
         }
 
         this.lastMotionTime = now;
-        const lastVisualPoint = this.visualHistory[this.visualHistory.length - 1];
-        if (!lastVisualPoint || lastVisualPoint.x !== this.visualPosition.x || lastVisualPoint.y !== this.visualPosition.y) {
+        const lastPoint = this.visualHistory[this.visualHistory.length - 1];
+        if (!lastPoint || lastPoint.x !== this.visualPosition.x || lastPoint.y !== this.visualPosition.y) {
             this.visualHistory.push({ ...this.visualPosition });
             if (this.visualHistory.length > this.MAX_PATH_LENGTH) this.visualHistory.shift();
         }

@@ -248,10 +248,6 @@ const GPSRenderer = {
             shipY = ry(1) + 10;
         }
 
-        // Keep the vessel visible while a GPS fix is acquired or restored.
-        shipX = Math.max(18, Math.min(W - 18, shipX));
-        shipY = Math.max(18, Math.min(H - 18, shipY));
-
         const heading = tel ? (tel.heading ?? tel.course) : null;
         const headingDegrees = Number(heading);
         const headingRadians = Number.isFinite(headingDegrees)
@@ -293,7 +289,7 @@ const GPSRenderer = {
         }
 
         // COG shows the actual movement direction, including reverse motion.
-        if (tel && Number.isFinite(Number(tel.course)) && tel.fix && visualPosition && Number.isFinite(visualPosition.x) && Number.isFinite(visualPosition.y)) {
+        if (tel && Number.isFinite(Number(tel.course)) && visualPosition) {
             const movementRad = (Number(tel.course) - 90) * (Math.PI / 180);
             const movementLength = 16;
             ctx.beginPath();

@@ -4,7 +4,6 @@ import serial
 import pynmea2
 import threading
 import time
-import re
 
 # =========================================================
 # CONFIG
@@ -26,6 +25,10 @@ gps_data = {
     "speed_kmh": None,
     "course": None,
     "heading": None,
+    "left_rpm": None,
+    "right_rpm": None,
+    "motor_speed_mps": None,
+    "motor_direction": "STOP",
     "satellites": None,
     "hdop": None,
     "fix": False,
@@ -53,7 +56,7 @@ def parse_nmea(line):
         # Posisi + altitude + satellite + HDOP
         # -------------------------------------------------
 
-        if re.match(r"^\$..GGA(?:,|\*)", line):
+        if line.startswith("$GPGGA") or line.startswith("$GNGGA"):
 
             msg = pynmea2.parse(line)
 
@@ -83,7 +86,7 @@ def parse_nmea(line):
         # Speed + Course
         # -------------------------------------------------
 
-        elif re.match(r"^\$..RMC(?:,|\*)", line):
+        elif line.startswith("$GPRMC") or line.startswith("$GNRMC"):
 
             msg = pynmea2.parse(line)
 
@@ -129,6 +132,15 @@ def set_heading(heading):
     """Simpan heading kompas terbaru agar tersedia untuk telemetry web."""
     with _gps_lock:
         gps_data["heading"] = float(heading)
+
+
+def set_motor_feedback(left_rpm, right_rpm, speed_mps, direction):
+    """Simpan feedback kecepatan motor terbaru dari STM32."""
+    with _gps_lock:
+        gps_data["left_rpm"] = float(left_rpm)
+        gps_data["right_rpm"] = float(right_rpm)
+        gps_data["motor_speed_mps"] = float(speed_mps)
+        gps_data["motor_direction"] = str(direction).upper()
 
 
 # =========================================================
