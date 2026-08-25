@@ -7,7 +7,7 @@ import time
 import threading
 import logging
 
-from flask import Flask, Response, send_from_directory, abort, jsonify, request
+from flask import Flask, Response, send_from_directory, send_file, abort, jsonify, request
 
 from gps import get_gps_data
 from motor_state import get_motor_data
@@ -1044,6 +1044,38 @@ def api_list_photos(camera):
         "must-revalidate"
     )
 
+    return response
+
+
+@app.route(
+    "/api/latest-photo/<camera>"
+)
+def api_latest_photo(camera):
+    photo_dir = _PHOTO_DIRS.get(
+        camera
+    )
+
+    if photo_dir is None:
+        abort(404)
+
+    files = _list_photos(photo_dir)
+
+    if not files:
+        abort(404)
+
+    latest_file = max(
+        files,
+        key=lambda filename: os.path.getmtime(
+            os.path.join(photo_dir, filename)
+        )
+    )
+
+    response = send_file(
+        os.path.join(photo_dir, latest_file),
+        mimetype="image/jpeg",
+        max_age=0
+    )
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     return response
 
 

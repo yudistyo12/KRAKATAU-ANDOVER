@@ -13,7 +13,9 @@ const CONFIG = {
     
     PHOTOS: {
         SURFACE: `${API_BASE_URL}/api/photos/surface`,
-        UNDERWATER: `${API_BASE_URL}/api/photos/underwater`
+        UNDERWATER: `${API_BASE_URL}/api/photos/underwater`,
+        LATEST_SURFACE: `${API_BASE_URL}/api/latest-photo/surface`,
+        LATEST_UNDERWATER: `${API_BASE_URL}/api/latest-photo/underwater`
     },
     POLL_INTERVALS: {
         TELEMETRY: 1000,

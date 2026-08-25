@@ -612,11 +612,19 @@ def capture_waypoint_photo(case_label):
                 "=============================="
             )
 
+            filename = None
             try:
 
                 filename = (
                     capture_underwater_photo()
                 )
+
+                if filename is None:
+                    print(
+                        "Foto underwater belum berhasil disimpan; "
+                        "akan dicoba lagi."
+                    )
+                    return
 
                 print(
                     f"Foto underwater: "
@@ -630,7 +638,9 @@ def capture_waypoint_photo(case_label):
                     f"underwater: {e}"
                 )
 
-            foto1 = False
+            foto1 = True
+            if filename is not None:
+                foto1 = False
 
 
     elif case_label == "CASE14":
@@ -648,11 +658,19 @@ def capture_waypoint_photo(case_label):
                 "=============================="
             )
 
+            filename = None
             try:
 
                 filename = (
                     capture_surface_photo()
                 )
+
+                if filename is None:
+                    print(
+                        "Foto surface belum berhasil disimpan; "
+                        "akan dicoba lagi."
+                    )
+                    return
 
                 print(
                     f"Foto surface: "
@@ -666,7 +684,9 @@ def capture_waypoint_photo(case_label):
                     f"surface: {e}"
                 )
 
-            foto2 = False
+            foto2 = True
+            if filename is not None:
+                foto2 = False
 
 
 # =========================================================

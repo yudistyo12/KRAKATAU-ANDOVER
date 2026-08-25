@@ -17,7 +17,8 @@ const CameraManager = {
 
         if (!img) return;
 
-        img.src = streamUrl;
+        img.removeAttribute('crossorigin');
+        img.src = `${streamUrl}?t=${Date.now()}`;
         img.style.display = 'block';
 
         img.onerror = () => {
@@ -89,52 +90,28 @@ const CameraManager = {
     async refreshLatestSnapshot(camera) {
         const container = document.getElementById(`${camera}-snapshot-container`);
         if (!container) return;
-        const apiUrl = camera === 'surface' ? CONFIG.PHOTOS.SURFACE : CONFIG.PHOTOS.UNDERWATER;
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4500);
+        const latestUrl = camera === 'surface'
+            ? CONFIG.PHOTOS.LATEST_SURFACE
+            : CONFIG.PHOTOS.LATEST_UNDERWATER;
         container.classList.add('is-loading');
         container.classList.remove('is-error');
-        try {
-            const res = await fetch(`${apiUrl}?t=${Date.now()}`, {
-                cache: 'no-store',
-                signal: controller.signal
-            });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const imageUrl = `${latestUrl}?t=${Date.now()}`;
+        let image = container.querySelector('img');
 
-            const data = await res.json();
-            const latestPath = this.getLatestPhoto(data);
-            if (!latestPath) {
-                this.setSnapshotMessage(container, `Belum ada foto ${camera}.`, false);
-                return;
-            }
-            const latestPhoto = /^https?:\/\//i.test(latestPath)
-                ? latestPath
-                : API_BASE_URL + (latestPath.startsWith('/') ? latestPath : `/${latestPath}`);
-            const image = container.querySelector('img');
-            const imageUrl = `${latestPhoto}${latestPhoto.includes('?') ? '&' : '?'}t=${Date.now()}`;
-
-            if (image) {
-                image.src = imageUrl;
-                image.dataset.photoPath = latestPath;
-                container.classList.remove('is-loading', 'is-error');
-                return;
-            }
-
-            const latestImage = document.createElement('img');
-            latestImage.src = imageUrl;
-            latestImage.alt = `${camera} snapshot terakhir`;
-            latestImage.loading = 'lazy';
-            latestImage.dataset.photoPath = latestPath;
-            container.replaceChildren(latestImage);
-            container.classList.remove('is-loading', 'is-error');
-        } catch (err) {
-            if (!container.querySelector('img')) {
-                this.setSnapshotMessage(container, `Snapshot ${camera} offline.`, true);
-            }
-            console.warn(`[GCS] Tidak dapat memuat snapshot ${camera}:`, err);
-        } finally {
-            clearTimeout(timeoutId);
+        if (!image) {
+            image = document.createElement('img');
+            image.alt = `${camera} snapshot terakhir`;
+            image.loading = 'lazy';
+            container.replaceChildren(image);
         }
+
+        image.onload = () => {
+            container.classList.remove('is-loading', 'is-error');
+        };
+        image.onerror = () => {
+            this.setSnapshotMessage(container, `Belum ada foto ${camera}.`, false);
+        };
+        image.src = imageUrl;
     },
 
     setSnapshotMessage(container, message, isError) {
