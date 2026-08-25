@@ -12,7 +12,7 @@ import os
 
 GPS_PORT = os.getenv("GPS_DEVICE", "/dev/ttyUSB0")
 PORT = "/dev/ttyACM0"
-GPS_BAUD = int(os.getenv("GPS_BAUD", "115200"))
+GPS_BAUD = int(os.getenv("GPS_BAUD", "9600"))
 
 # =========================================================
 # GPS DATA (shared, thread-safe)
@@ -179,18 +179,17 @@ def _gps_loop(port, baud, verbose):
 
     global _gps_serial
 
-    try:
-        _gps_serial = serial.Serial(port, baud, timeout=1)
-        print(f"[OK] GPS connected on {port}")
-
-    except Exception as e:
-        print("[ERROR] Cannot open GPS")
-        print(e)
-        return
-
     last_display = 0
 
     while not _stop_event.is_set():
+        if _gps_serial is None or not _gps_serial.is_open:
+            try:
+                _gps_serial = serial.Serial(port, baud, timeout=1)
+                print(f"[OK] GPS connected on {port} at {baud} baud")
+            except Exception as e:
+                print(f"[GPS] Cannot open {port}: {e}; retrying...")
+                time.sleep(2)
+                continue
 
         try:
             line = _gps_serial.readline().decode(
@@ -200,6 +199,11 @@ def _gps_loop(port, baud, verbose):
 
         except Exception as e:
             print(f"[GPS READ ERROR] {e}")
+            try:
+                _gps_serial.close()
+            except Exception:
+                pass
+            _gps_serial = None
             time.sleep(0.5)
             continue
 
