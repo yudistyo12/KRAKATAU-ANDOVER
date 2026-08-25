@@ -491,43 +491,46 @@ class _CameraGrabber:
         with self.frame_lock:
             return self.latest_frame
 
-        # -------------------------------------------------
+    # =====================================================
+    # SAVE SNAPSHOT
+    # =====================================================
+
+    def save_snapshot(self, save_dir):
+
+        frame = self.get_frame()
+
+        if frame is None:
+            print(
+                f"ERROR: belum ada frame "
+                f"{self.label}"
+            )
+            return None
+
+        os.makedirs(save_dir, exist_ok=True)
 
         filename = os.path.join(
             save_dir,
-            f"{self.label}_"
-            f"{time.strftime('%Y%m%d_%H%M%S')}.jpg"
+            f"{self.label}_{time.strftime('%Y%m%d_%H%M%S')}.jpg"
         )
-
-        # -------------------------------------------------
-        # SAVE
-        # -------------------------------------------------
 
         success = cv2.imwrite(
             filename,
             frame,
             [
-                int(
-                    cv2.IMWRITE_JPEG_QUALITY
-                ),
+                int(cv2.IMWRITE_JPEG_QUALITY),
                 JPEG_QUALITY
             ]
         )
 
         if not success:
-
             print(
-                f"ERROR: gagal menyimpan "
-                f"foto {self.label}"
+                f"ERROR: gagal menyimpan foto {self.label}"
             )
-
             return None
 
         print(
-            f"Foto {self.label} disimpan: "
-            f"{filename}"
+            f"Foto {self.label} disimpan: {filename}"
         )
-
         return filename
 
 
