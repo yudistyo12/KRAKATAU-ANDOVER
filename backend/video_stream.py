@@ -1167,6 +1167,8 @@ def start_web_server():
 
 def start_streaming():
 
+    start_web_server()
+
     print()
     print(
         "=========================================="
@@ -1186,11 +1188,6 @@ def start_streaming():
     underwater_ok = (
         _underwater_grabber.start()
     )
-
-    # Web server tetap dijalankan walaupun
-    # salah satu kamera gagal.
-
-    start_web_server()
 
     print()
 
