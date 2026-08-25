@@ -27,17 +27,6 @@ const GCSApp = {
         }).format(now);
     },
 
-    // ============================================================
-    // GCS FAILSAFE HEARTBEAT
-    // ============================================================
-    startHeartbeat() {
-        setInterval(() => {
-            // Mengirim ping ke endpoint Python Flask
-            fetch(`${CONFIG.API_BASE_URL}/ping_gcs`, { method: 'POST' })
-                .catch(err => console.warn("GCS Heartbeat error:", err));
-        }, 300); // Kirim sinyal ping tiap 300ms
-    },
-
     init() {
         const urlParams = new URLSearchParams(window.location.search);
         const selectedLane = urlParams.get('lane');
@@ -60,9 +49,6 @@ const GCSApp = {
 
         CameraManager.refreshLatestSnapshots();
         setInterval(() => CameraManager.refreshLatestSnapshots(), CONFIG.POLL_INTERVALS.SNAPSHOTS);
-
-        // Jalankan GCS Heartbeat Failsafe
-        this.startHeartbeat();
     }
 };
 

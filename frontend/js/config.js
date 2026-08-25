@@ -4,7 +4,6 @@
 const API_BASE_URL = "http://192.168.1.102:5001";
 
 const CONFIG = {
-    API_BASE_URL,
     TELEMETRY: `${API_BASE_URL}/telemetry`,
     CAMERA: {
         SURFACE: `${API_BASE_URL}/surface_feed`,

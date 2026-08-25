@@ -3,7 +3,6 @@
 
 import serial
 import time
-import threading
 
 from video_stream import (
     start_streaming,
@@ -11,48 +10,40 @@ from video_stream import (
     start_web_server
 )
 from video_stream import capture_surface_photo, capture_underwater_photo
-from gps import start_gps_reader, stop_gps_reader, get_gps_data, set_heading
+
+from gps import (
+    start_gps_reader,
+    stop_gps_reader,
+    get_gps_data,
+    set_heading,
+    set_motor_feedback
+)
 
 
 # =========================================================
-# CONFIG & FAILSAFE WEB GCS
+# CONFIG
 # =========================================================
+
 PORT = "/dev/ttyACM0"
 BAUDRATE = 115200
 
-last_gcs_heartbeat = time.time()
-GCS_TIMEOUT = 1.5  # Batas toleransi sinyal Web terputus (1.5 detik)
-is_gcs_connected = True
-
-def update_gcs_heartbeat():
-    """Panggil fungsi ini saat web frontend mengirim ping"""
-    global last_gcs_heartbeat, is_gcs_connected
-    last_gcs_heartbeat = time.time()
-    is_gcs_connected = True
-
-def monitor_gcs_failsafe():
-    """Thread background untuk mendeteksi hilangnya sinyal Web/GCS"""
-    global is_gcs_connected
-    while True:
-        if time.time() - last_gcs_heartbeat > GCS_TIMEOUT:
-            if is_gcs_connected:
-                print("\n[WARNING] WEB GCS DISCONNECTED! Stopping Auto Commands...")
-                is_gcs_connected = False
-        time.sleep(0.1)
-
-# Jalankan monitoring thread GCS
-threading.Thread(target=monitor_gcs_failsafe, daemon=True).start()
-
 
 # =========================================================
-# CASE & AUTO WAYPOINTS
+# CASE
 # =========================================================
+
 CASE_MANUAL = 0
 CASE_AUTO = 1
+
 current_case = CASE_MANUAL
+
 
 foto1 = True
 foto2 = True
+
+# =========================================================
+# AUTO SUB-CASE
+# =========================================================
 
 AUTO_CASE_1  = 1
 AUTO_CASE_2  = 2
@@ -71,56 +62,69 @@ AUTO_CASE_14 = 14
 AUTO_CASE_15 = 15
 AUTO_CASE_16 = 16
 AUTO_CASE_17 = 17
-AUTO_CASE_DONE = 18
+AUTO_CASE_DONE = 18   # selesai semua waypoint
 
 auto_sub_case = AUTO_CASE_1
 is_done_processed = False
 
-WAYPOINT_1_HEADING  = 239.0
-WAYPOINT_2_HEADING  = 210.0
-WAYPOINT_3_HEADING  = 254.0
-WAYPOINT_4_HEADING  = 230.0
-WAYPOINT_5_HEADING  = 112.0
-WAYPOINT_6_HEADING  = 117.0
-WAYPOINT_7_HEADING  = 117.0
-WAYPOINT_8_HEADING  = 117.0
-WAYPOINT_9_HEADING  = 25.0
-WAYPOINT_10_HEADING = 15.0
+WAYPOINT_1_HEADING  = 234.0
+WAYPOINT_2_HEADING  = 197.0
+WAYPOINT_3_HEADING  = 269.0 # isi sesuai kebutuhan
+WAYPOINT_4_HEADING  = 224.0
+WAYPOINT_5_HEADING  = 116.0
+WAYPOINT_6_HEADING  = 110.0
+WAYPOINT_7_HEADING  = 116.0
+WAYPOINT_8_HEADING  = 42.0
+WAYPOINT_9_HEADING  = 32.0
+WAYPOINT_10_HEADING = 7.0
 WAYPOINT_11_HEADING = 358.0
-WAYPOINT_12_HEADING = 311.0
-WAYPOINT_13_HEADING = 314.0
-WAYPOINT_14_HEADING = 326.0
-WAYPOINT_15_HEADING = 314.0
-WAYPOINT_16_HEADING = 314.0
-WAYPOINT_17_HEADING = 314.0
+WAYPOINT_12_HEADING = 312.0
+WAYPOINT_13_HEADING = 312.0
+WAYPOINT_14_HEADING = 315.0
+WAYPOINT_15_HEADING = 320.0
+WAYPOINT_16_HEADING = 320.0
+WAYPOINT_17_HEADING = 234.0
 
 CASE_1_DURATION  = 5.0
 CASE_2_DURATION  = 5.0
 CASE_3_DURATION  = 5.0
-CASE_4_DURATION  = 5.0
+CASE_4_DURATION  = 7.0
 CASE_5_DURATION  = 5.0
-CASE_6_DURATION  = 4.0
+CASE_6_DURATION  = 5.0
 CASE_7_DURATION  = 4.0
-CASE_8_DURATION  = 2.500
-CASE_9_DURATION  = 6.0
-CASE_10_DURATION = 3.0
-CASE_11_DURATION = 5.0
-CASE_12_DURATION = 7.0
-CASE_13_DURATION = 3.0
-CASE_14_DURATION = 2.0
-CASE_15_DURATION = 3.0
-CASE_16_DURATION = 5.0
-CASE_17_DURATION = 5.0
+CASE_8_DURATION  = 3.0
+CASE_9_DURATION  = 5.0
+CASE_10_DURATION = 4.0
+CASE_11_DURATION = 4.0
+CASE_12_DURATION = 5.0
+CASE_13_DURATION = 5.0
+CASE_14_DURATION = 5.0
+CASE_15_DURATION = 5.0
+CASE_16_DURATION = 6.0
+CASE_17_DURATION = 6.0
+
 
 case_start_time = None
+
+# =========================================================
+# WAYPOINT CAPTURE FOTO
+# =========================================================
+
 CAPTURE_LABELS = ("CASE12", "CASE14")
+
+
+# =========================================================
+# HEADING
+# =========================================================
 
 heading = None
 target_heading = None
 
+
 # =========================================================
 # PID CONFIG
 # =========================================================
+
 Kp = 0.8
 Ki = 0.02
 Kd = 0.15
@@ -128,129 +132,260 @@ Kd = 0.15
 pid_integral = 0.0
 pid_previous_error = 0.0
 pid_previous_time = None
+
 PID_INTEGRAL_LIMIT = 100.0
 
+
+# =========================================================
+# SERVO CONFIG
+# =========================================================
+
 SERVO_CENTER = 90
+
 SERVO_MIN = 45
 SERVO_MAX = 180
+
+
+# =========================================================
+# AUTO VALUE
+# =========================================================
 
 auto_servo = 90
 auto_esc1 = 1700
 auto_esc2 = 1700
 
+
+# =========================================================
+# KONTROL ARAH MOTOR PER CASE
+# =========================================================
+
 ESC_FORWARD_VALUE = 1700
-ESC_REVERSE_VALUE = 1000
+ESC_REVERSE_VALUE = 1000   # sesuaikan sesuai kalibrasi ESC kapal
+
 REVERSE_CASE_LABELS = ("CASE13", "CASE15")
 
 
+# =========================================================
+# PID RESET
+# =========================================================
+
 def reset_pid():
-    global pid_integral, pid_previous_error, pid_previous_time
+    global pid_integral
+    global pid_previous_error
+    global pid_previous_time
+
     pid_integral = 0.0
     pid_previous_error = 0.0
     pid_previous_time = None
 
 
 # =========================================================
-# SEND AUTO (TERPROTEKSI GCS FAILSAFE)
+# SEND AUTO
 # =========================================================
-def send_auto(ser, servo, esc1, esc2):
-    # Jika Web GCS terputus, hentikan pengiriman serial ke STM32
-    if not is_gcs_connected:
-        print("FAILSAFE ACTIVE: Menghentikan transmisi AUTO ke STM32")
-        return
 
-    command = f"AUTO,SERVO={servo},ESC1={esc1},ESC2={esc2}\n"
+def send_auto(ser, servo, esc1, esc2):
+    command = (
+        f"AUTO,"
+        f"SERVO={servo},"
+        f"ESC1={esc1},"
+        f"ESC2={esc2}\n"
+    )
+
     try:
         ser.write(command.encode())
         print("TX:", command.strip())
+
     except serial.SerialException:
         print("ERROR: gagal mengirim data ke STM32")
 
 
+# =========================================================
+# HEADING ERROR
+# =========================================================
+
 def heading_error(target, actual):
     error = target - actual
-    while error > 180: error -= 360
-    while error < -180: error += 360
+
+    while error > 180:
+        error -= 360
+
+    while error < -180:
+        error += 360
+
     return error
 
 
+# =========================================================
+# PID HEADING
+# =========================================================
+
 def calculate_pid(actual_heading):
-    global pid_integral, pid_previous_error, pid_previous_time
+    global pid_integral
+    global pid_previous_error
+    global pid_previous_time
+
     now = time.monotonic()
+
     error = heading_error(target_heading, actual_heading)
 
-    dt = 0.01 if pid_previous_time is None else (now - pid_previous_time)
-    if dt <= 0: dt = 0.01
+    if pid_previous_time is None:
+        dt = 0.01
+    else:
+        dt = now - pid_previous_time
+        if dt <= 0:
+            dt = 0.01
 
     pid_previous_time = now
+
     pid_integral += error * dt
-    pid_integral = max(-PID_INTEGRAL_LIMIT, min(PID_INTEGRAL_LIMIT, pid_integral))
+
+    if pid_integral > PID_INTEGRAL_LIMIT:
+        pid_integral = PID_INTEGRAL_LIMIT
+    elif pid_integral < -PID_INTEGRAL_LIMIT:
+        pid_integral = -PID_INTEGRAL_LIMIT
 
     derivative = (error - pid_previous_error) / dt
     pid_previous_error = error
 
-    output = (Kp * error) + (Ki * pid_integral) + (Kd * derivative)
+    output = (
+        Kp * error
+        + Ki * pid_integral
+        + Kd * derivative
+    )
+
     servo = SERVO_CENTER + output
     servo = max(SERVO_MIN, min(SERVO_MAX, servo))
+    servo = int(round(servo))
 
-    return int(round(servo)), error, output
+    return servo, error, output
 
+
+# =========================================================
+# BACA MODE DARI REMOTE
+# =========================================================
 
 def read_mode(line):
-    global current_case, target_heading, auto_sub_case, case_start_time, is_done_processed
-    if not line.startswith("REMOTE"): return
+    global current_case
+    global target_heading
+    global auto_sub_case
+    global case_start_time
+    global is_done_processed
+
+    if not line.startswith("REMOTE"):
+        return
 
     if "MODE=AUTO" in line:
         if current_case != CASE_AUTO:
             current_case = CASE_AUTO
             reset_pid()
             target_heading = WAYPOINT_1_HEADING
+
             auto_sub_case = AUTO_CASE_1
             case_start_time = None
             is_done_processed = False
+
             start_streaming()
 
-            print("\n==============================\nMODE -> AUTO\n==============================\n")
+            print()
+            print("==============================")
+            print("MODE -> AUTO")
+            print("CASE 1: koreksi heading ke waypoint 1")
+            print("==============================")
+            print()
 
-    elif "MODE=MANUAL" in line or "MODE=STANDBY" in line:
+    elif "MODE=MANUAL" in line:
         if current_case != CASE_MANUAL:
             current_case = CASE_MANUAL
             target_heading = None
             reset_pid()
-            print(f"\n==============================\nMODE -> {line.split('MODE=')[1].split(',')[0]}\n==============================\n")
 
+            print()
+            print("==============================")
+            print("MODE -> MANUAL")
+            print("Kontrol penuh oleh STM32")
+            print("==============================")
+            print()
+
+    elif "MODE=STANDBY" in line:
+        if current_case != CASE_MANUAL:
+            current_case = CASE_MANUAL
+            target_heading = None
+            reset_pid()
+
+            print()
+            print("==============================")
+            print("MODE -> STANDBY")
+            print("==============================")
+            print()
+
+
+# =========================================================
+# CAPTURE FOTO DI WAYPOINT
+# =========================================================
 
 def capture_waypoint_photo(case_label):
-    global foto1, foto2
-    if case_label not in CAPTURE_LABELS: return
-    if case_label == "CASE12" and foto1:
-        capture_underwater_photo()
-        foto1 = False
-    elif case_label == "CASE14" and foto2:
-        capture_surface_photo()
-        foto2 = False
+    if case_label not in CAPTURE_LABELS:
+        return
 
+    print()
+    print("==============================")
+    print(f"{case_label}: CAPTURE FOTO")
+    print("==============================")
+
+    # Perbaikan: disesuaikan dengan isi CAPTURE_LABELS
+    if case_label == "CASE12" and foto1 == True:
+        capture_underwater_photo()
+    elif case_label == "CASE14" and foto2 == True:
+        capture_surface_photo()
+
+
+# =========================================================
+# BACA HEADING & EKSEKUSI AUTO
+# =========================================================
 
 def run_case(ser, heading, duration_target, next_heading, next_case, case_label):
-    global case_start_time, auto_sub_case, target_heading
+    global case_start_time
+    global auto_sub_case
+    global target_heading
+
     if case_start_time is None:
         case_start_time = time.monotonic()
+
+        print()
+        print("==============================")
+        print(f"{case_label} MULAI, TARGET = {target_heading:.2f}")
+        print("==============================")
+        print()
 
     run_pid_case(ser, heading, case_label)
 
     elapsed = time.monotonic() - case_start_time
-    if elapsed >= (duration_target * 0.5):
+    durasi_foto = duration_target * 0.5
+    if elapsed >= durasi_foto:
         capture_waypoint_photo(case_label)
-
+    if elapsed > durasi_foto:
+        foto1 = False
+        foto2 = False
     if elapsed >= duration_target:
         auto_sub_case = next_case
         case_start_time = None
         target_heading = next_heading
         reset_pid()
 
+        print()
+        print("==============================")
+        print(f"{case_label} SELESAI")
+        if target_heading is not None:
+            print(f"TARGET HEADING = {target_heading:.2f}")
+        print("==============================")
+        print()
+
 
 def run_pid_case(ser, heading, case_label):
-    global auto_servo, auto_esc1, auto_esc2
+    global auto_servo
+    global auto_esc1
+    global auto_esc2
+
     servo, error, output = calculate_pid(heading)
     auto_servo = servo
 
@@ -263,19 +398,37 @@ def run_pid_case(ser, heading, case_label):
 
     send_auto(ser, auto_servo, auto_esc1, auto_esc2)
 
+    print(
+        f"{case_label}"
+#        f"TARGET = {target_heading:7.2f} | "
+#        f"ERROR = {error:7.2f} | "
+#        f"PID = {output:7.2f} | "
+#        f"SERVO = {servo:3d}"
+    )
+
 
 def read_heading(line, ser):
-    global heading, auto_sub_case, auto_servo, is_done_processed
-    if not line.startswith("COMPASS") or "HEADING=" not in line: return
+    global heading
+    global auto_sub_case
+    global auto_servo
+    global is_done_processed
+
+    if not line.startswith("COMPASS"):
+        return
+
+    if "HEADING=" not in line:
+        return
 
     try:
-        data = line.split("HEADING=", 1)[1].split(",", 1)[0]
+        data = line.split("HEADING=", 1)[1]
+        data = data.split(",", 1)[0]
         heading = float(data)
         set_heading(heading)
     except ValueError:
         return
 
-    if current_case != CASE_AUTO: return
+    if current_case != CASE_AUTO:
+        return
 
     CASE_CHAIN = [
         (AUTO_CASE_1,  CASE_1_DURATION,  WAYPOINT_2_HEADING,  AUTO_CASE_2,  "CASE1"),
@@ -302,55 +455,205 @@ def read_heading(line, ser):
             run_case(ser, heading, duration, next_heading, next_case, label)
             return
 
-    if auto_sub_case == AUTO_CASE_DONE and not is_done_processed:
-        auto_servo = 90
-        send_auto(ser, auto_servo, 1500, 1500)
-        stop_streaming()
-        is_done_processed = True
+    if auto_sub_case == AUTO_CASE_DONE:
+        if not is_done_processed:
+            auto_servo = 90
+            send_auto(ser, auto_servo, 1500, 1500) # Stop ESC
+            stop_streaming()
+#            print(f"DONE | HEADING = {heading:7.2f}")
+            is_done_processed = True
 
+
+# =========================================================
+# PROCESS MOTOR FEEDBACK STM32
+# =========================================================
+
+def read_motor_feedback(line):
+    """Parse MOTOR feedback yang dikirim STM32."""
+    values = {}
+    for item in line.split(",")[1:]:
+        if "=" in item:
+            key, value = item.split("=", 1)
+            values[key.strip().upper()] = value.strip()
+
+    try:
+        speed_mps = float(values.get("SPEED_MPS", 0))
+        set_motor_feedback(
+            left_rpm=float(values.get("LEFT_RPM", 0)),
+            right_rpm=float(values.get("RIGHT_RPM", 0)),
+            speed_mps=speed_mps,
+            direction=values.get(
+                "DIRECTION",
+                "REVERSE" if speed_mps < 0 else "FORWARD"
+            )
+        )
+    except (TypeError, ValueError):
+        print(f"[MOTOR] Format feedback tidak valid: {line}")
+
+
+# =========================================================
+# PROCESS DATA STM32
+# =========================================================
 
 def process_line(line, ser):
-    if line.startswith("REMOTE"): read_mode(line)
-    elif line.startswith("COMPASS"): read_heading(line, ser)
+    if line.startswith("REMOTE"):
+        read_mode(line)
+        return
+
+    if line.startswith("COMPASS"):
+        read_heading(line, ser)
+        return
+
+    if line.startswith("MOTOR"):
+        read_motor_feedback(line)
 
 
 # =========================================================
-# MAIN LOOP
+# MAIN
 # =========================================================
+
 def main():
     global current_case
+
+    print()
+    print("==========================================")
+    print(" MINI PC - REMOTE / MANUAL / AUTO")
+    print("==========================================")
+    print(f"Port     : {PORT}")
+    print(f"Baudrate : {BAUDRATE}")
+    print()
+
+    print("PID CONFIG")
+    print(f"Kp = {Kp}")
+    print(f"Ki = {Ki}")
+    print(f"Kd = {Kd}")
+
+    print()
+    print(f"Servo range : {SERVO_MIN} - {SERVO_MAX}")
+    print(f"Servo center: {SERVO_CENTER}")
+    print()
+
     ser = None
 
     try:
+        print("Membuka GPS reader (background thread)...")
         start_gps_reader()
         start_web_server()
 
-        ser = serial.Serial(PORT, BAUDRATE, timeout=0.05)
+        print(f"Membuka serial {PORT}...")
+
+        ser = serial.Serial(
+            PORT,
+            BAUDRATE,
+            timeout=0.05
+        )
+
+        # Mengaktifkan DTR/RTS untuk memicu transmisi USB CDC STM32
         ser.dtr = True
         ser.rts = True
+
+        print("Serial berhasil dibuka.")
+
         time.sleep(2)
         ser.reset_input_buffer()
         ser.reset_output_buffer()
 
         current_case = CASE_MANUAL
+        target_heading = None
         reset_pid()
 
-        print("\nSTM32 & GCS MONITORING READY...\n")
+        print()
+        print("STM32 TERHUBUNG")
+        print("Monitoring mode...")
+        print()
+
+        print("CASE 0 = MANUAL")
+        print("CASE 1 = AUTO")
+        print()
+
+        print()
 
         while True:
             while ser.in_waiting:
-                line = ser.readline().decode("utf-8", errors="ignore").strip()
-                if line:
-                    process_line(line, ser)
+                line = ser.readline().decode(
+                    "utf-8",
+                    errors="ignore"
+                ).strip()
+
+                if not line:
+                    continue
+
+                if not line.startswith("REMOTE"):
+                    print("RX:", repr(line))
+
+                process_line(line, ser)
+
             time.sleep(0.01)
 
     except KeyboardInterrupt:
-        print("\nProgram Dihentikan Pengguna.")
+        print()
+        print("==========================================")
+        print(" CTRL+C TERDETEKSI")
+        print(" Menghentikan program...")
+        print("==========================================")
+
+    except serial.SerialException as e:
+        print()
+        print("ERROR SERIAL:")
+        print(e)
+        print("API GPS tetap aktif; menunggu koneksi STM32...")
+
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            print("\nProgram dihentikan.")
+
+    except Exception as e:
+        print()
+        print("ERROR PROGRAM:")
+        print(e)
+
     finally:
-        stop_streaming()
-        stop_gps_reader()
-        if ser and ser.is_open:
-            ser.close()
+        print()
+        print("==========================================")
+        print(" CLEANUP")
+        print("==========================================")
+
+        try:
+            print("Menghentikan camera streaming...")
+            stop_streaming()
+            print("Camera streaming dihentikan.")
+        except Exception as e:
+            print(f"WARNING: gagal menghentikan streaming: {e}")
+
+        try:
+            print("Menghentikan GPS reader...")
+            stop_gps_reader()
+            print("GPS reader dihentikan.")
+        except Exception as e:
+            print(f"WARNING: gagal menghentikan GPS reader: {e}")
+
+        if ser is not None:
+            try:
+                if ser.is_open:
+                    print(f"Menutup serial {PORT}...")
+                    ser.reset_input_buffer()
+                    ser.reset_output_buffer()
+                    ser.close()
+                    print(f"Serial {PORT} berhasil ditutup.")
+            except Exception as e:
+                print(f"WARNING: gagal menutup serial: {e}")
+
+        print()
+        print("Program selesai.")
+        print("Serial dan kamera sudah dibersihkan.")
+        print()
+
+
+# =========================================================
+# START
+# =========================================================
 
 if __name__ == "__main__":
     main()
