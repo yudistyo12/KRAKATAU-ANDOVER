@@ -534,7 +534,7 @@ def main():
 
     try:
         print("Membuka GPS reader (background thread)...")
-        start_gps_reader()
+        start_gps_reader(verbose=True)
         start_web_server()
 
         print(f"Membuka serial {PORT}...")

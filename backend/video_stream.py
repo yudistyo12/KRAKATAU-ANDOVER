@@ -590,8 +590,14 @@ app = Flask(__name__)
 def _add_cors_headers(response):
 
     origin = request.headers.get("Origin")
+    local_origin = origin and (
+        origin.startswith("http://localhost:")
+        or origin.startswith("http://127.0.0.1:")
+        or origin.startswith("http://192.168.0.")
+        or origin.startswith("http://192.168.1.")
+    )
 
-    if origin in ALLOWED_ORIGINS:
+    if origin in ALLOWED_ORIGINS or local_origin:
         response.headers[
             "Access-Control-Allow-Origin"
         ] = origin

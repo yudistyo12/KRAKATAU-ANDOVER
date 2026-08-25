@@ -13,6 +13,13 @@ import os
 GPS_PORT = os.getenv("GPS_DEVICE", "/dev/ttyUSB0")
 PORT = "/dev/ttyACM0"
 GPS_BAUD = int(os.getenv("GPS_BAUD", "9600"))
+GPS_BAUD_CANDIDATES = tuple(dict.fromkeys([
+    GPS_BAUD,
+    4800,
+    9600,
+    38400,
+    115200
+]))
 
 # =========================================================
 # GPS DATA (shared, thread-safe)
@@ -175,6 +182,41 @@ def print_gps():
 # BACKGROUND READER THREAD
 # =========================================================
 
+def _connect_gps(port):
+    for baud in GPS_BAUD_CANDIDATES:
+        connection = None
+        try:
+            connection = serial.Serial(port, baud, timeout=0.5)
+            deadline = time.monotonic() + 3
+
+            while time.monotonic() < deadline:
+                line = connection.readline().decode(
+                    "ascii",
+                    errors="ignore"
+                ).strip()
+                if not line:
+                    continue
+
+                try:
+                    message = pynmea2.parse(line)
+                except pynmea2.ParseError:
+                    continue
+
+                if message.sentence_type in ("RMC", "GGA"):
+                    print(f"[OK] GPS connected on {port} at {baud} baud")
+                    return connection, line
+
+            connection.close()
+        except Exception as error:
+            if connection is not None:
+                try:
+                    connection.close()
+                except Exception:
+                    pass
+            print(f"[GPS] Cannot read {port} at {baud} baud: {error}")
+
+    return None, None
+
 def _gps_loop(port, baud, verbose):
 
     global _gps_serial
@@ -183,13 +225,12 @@ def _gps_loop(port, baud, verbose):
 
     while not _stop_event.is_set():
         if _gps_serial is None or not _gps_serial.is_open:
-            try:
-                _gps_serial = serial.Serial(port, baud, timeout=1)
-                print(f"[OK] GPS connected on {port} at {baud} baud")
-            except Exception as e:
-                print(f"[GPS] Cannot open {port}: {e}; retrying...")
+            _gps_serial, first_line = _connect_gps(port)
+            if _gps_serial is None:
+                print(f"[GPS] No NMEA data on {port}; retrying...")
                 time.sleep(2)
                 continue
+            parse_nmea(first_line)
 
         try:
             line = _gps_serial.readline().decode(
