@@ -5,13 +5,14 @@ import pynmea2
 import threading
 import time
 import os
+from serial.tools import list_ports
 
 # =========================================================
 # CONFIG
 # =========================================================
 
-GPS_PORT = os.getenv("GPS_DEVICE", "/dev/ttyUSB0")
-PORT = "/dev/ttyACM0"
+GPS_PORT = os.getenv("GPS_DEVICE", "")
+STM32_PORT = os.getenv("STM32_DEVICE", "/dev/ttyACM0")
 GPS_BAUD = int(os.getenv("GPS_BAUD", "115200"))
 
 # =========================================================
@@ -33,7 +34,9 @@ gps_data = {
     "satellites": None,
     "hdop": None,
     "fix": False,
-    "timestamp": None
+    "timestamp": None,
+    "gps_connected": False,
+    "last_update": None
 }
 
 _gps_lock = threading.Lock()
@@ -84,7 +87,9 @@ def parse_nmea(line):
                     gps_data["hdop"] = float(msg.horizontal_dil)
 
                 gps_data["timestamp"] = str(msg.timestamp)
+                gps_data["last_update"] = time.time()
                 gps_data["fix"] = _gga_fix or _rmc_fix
+            return True
 
 
         # -------------------------------------------------
@@ -115,11 +120,15 @@ def parse_nmea(line):
                     gps_data["course"] = float(msg.true_course)
 
                 gps_data["timestamp"] = str(msg.timestamp)
+                gps_data["last_update"] = time.time()
                 gps_data["fix"] = _gga_fix or _rmc_fix
+            return True
 
     except Exception as e:
 
         print(f"[GPS PARSE ERROR] {e}")
+
+    return False
 
 
 # =========================================================
@@ -179,18 +188,72 @@ def _gps_loop(port, baud, verbose):
 
     global _gps_serial
 
-    try:
-        _gps_serial = serial.Serial(port, baud, timeout=1)
-        print(f"[OK] GPS connected on {port}")
-
-    except Exception as e:
-        print("[ERROR] Cannot open GPS")
-        print(e)
-        return
-
     last_display = 0
+    baud_rates = list(dict.fromkeys((baud, 9600, 4800, 38400, 115200)))
+    baud_index = 0
+    last_valid_sentence = 0.0
+    selected_port = port
+
+    def available_ports():
+        configured = [selected_port] if selected_port else []
+        detected = [
+            item.device
+            for item in list_ports.comports()
+            if item.device != STM32_PORT
+        ]
+        candidates = list(dict.fromkeys(configured + detected))
+        available = [candidate for candidate in candidates if os.path.exists(candidate)]
+
+        if configured and configured[0] not in available:
+            print(
+                f"[GPS] Port konfigurasi tidak tersedia: {configured[0]}; "
+                "mencoba port serial lain yang terdeteksi"
+            )
+
+        return available
 
     while not _stop_event.is_set():
+
+        if _gps_serial is None or not _gps_serial.is_open:
+            ports = available_ports()
+            if not ports:
+                with _gps_lock:
+                    gps_data["gps_connected"] = False
+                print("[GPS] Tidak ada port serial GPS yang terdeteksi")
+                time.sleep(2)
+                continue
+
+            connected = False
+            for candidate_port in ports:
+                try:
+                    current_baud = baud_rates[baud_index]
+                    _gps_serial = serial.Serial(
+                        candidate_port,
+                        current_baud,
+                        timeout=1
+                    )
+                    selected_port = candidate_port
+                    with _gps_lock:
+                        gps_data["gps_connected"] = True
+                    print(
+                        f"[GPS] Mencoba {candidate_port} "
+                        f"@ {current_baud}"
+                    )
+                    last_valid_sentence = time.time()
+                    connected = True
+                    break
+                except Exception as error:
+                    print(
+                        f"[GPS] Tidak dapat membuka {candidate_port} "
+                        f"@ {current_baud}: {error}"
+                    )
+                    _gps_serial = None
+
+            if not connected:
+                with _gps_lock:
+                    gps_data["gps_connected"] = False
+                time.sleep(2)
+                continue
 
         try:
             line = _gps_serial.readline().decode(
@@ -200,13 +263,31 @@ def _gps_loop(port, baud, verbose):
 
         except Exception as e:
             print(f"[GPS READ ERROR] {e}")
+            with _gps_lock:
+                gps_data["gps_connected"] = False
+            try:
+                _gps_serial.close()
+            except Exception:
+                pass
+            _gps_serial = None
             time.sleep(0.5)
             continue
 
         if not line:
             continue
 
-        parse_nmea(line)
+        if parse_nmea(line):
+            last_valid_sentence = time.time()
+
+        if time.time() - last_valid_sentence > 8:
+            try:
+                _gps_serial.close()
+            except Exception:
+                pass
+            _gps_serial = None
+            baud_index = (baud_index + 1) % len(baud_rates)
+            last_valid_sentence = 0.0
+            continue
 
         if verbose:
             now = time.time()
@@ -219,6 +300,9 @@ def _gps_loop(port, baud, verbose):
             _gps_serial.close()
         except Exception:
             pass
+
+    with _gps_lock:
+        gps_data["gps_connected"] = False
 
     print("[GPS] Reader thread stopped")
 

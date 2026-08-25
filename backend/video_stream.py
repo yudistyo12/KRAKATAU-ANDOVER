@@ -149,6 +149,7 @@ UNDERWATER_FORMAT = "MJPG"
 
 READ_FPS = 20.0
 JPEG_QUALITY = 80
+ACTIVE_CAMERA_DEVICES = set()
 
 
 # =========================================================
@@ -211,16 +212,42 @@ class _CameraGrabber:
         # V4L2
         # -------------------------------------------------
 
-        self.cap = cv2.VideoCapture(
-            self.camera_index,
-            cv2.CAP_V4L2
-        )
+        candidates = [self.camera_index]
+        for index in range(10):
+            device = f"/dev/video{index}"
+            if device not in candidates and device not in ACTIVE_CAMERA_DEVICES:
+                candidates.append(device)
 
-        if not self.cap.isOpened():
-            self.cap.release()
-            self.cap = cv2.VideoCapture(
-                self.camera_index
+        candidates = [
+            candidate
+            for candidate in candidates
+            if candidate not in ACTIVE_CAMERA_DEVICES
+        ]
+
+        self.cap = None
+        selected_device = None
+
+        for candidate in candidates:
+            capture = cv2.VideoCapture(
+                candidate,
+                cv2.CAP_V4L2
             )
+
+            if capture.isOpened():
+                self.cap = capture
+                selected_device = candidate
+                break
+
+            capture.release()
+
+        if self.cap is None:
+            for candidate in candidates:
+                capture = cv2.VideoCapture(candidate)
+                if capture.isOpened():
+                    self.cap = capture
+                    selected_device = candidate
+                    break
+                capture.release()
 
         if not self.cap.isOpened():
 
@@ -232,6 +259,9 @@ class _CameraGrabber:
             self.cap = None
 
             return False
+
+        self.camera_index = selected_device
+        ACTIVE_CAMERA_DEVICES.add(selected_device)
 
         # -------------------------------------------------
         # PIXEL FORMAT
@@ -468,6 +498,8 @@ class _CameraGrabber:
                 )
 
             self.cap = None
+
+        ACTIVE_CAMERA_DEVICES.discard(self.camera_index)
 
         # -------------------------------------------------
         # CLEAR FRAME
@@ -750,8 +782,7 @@ def telemetry():
         display_speed = motor_speed_mps
 
     else:
-
-        display_speed = 0.0
+        display_speed = None
 
     # -----------------------------------------------------
     # RESPONSE
@@ -808,6 +839,15 @@ def telemetry():
 
         "timestamp": data.get(
             "timestamp"
+        ),
+
+        "gps_connected": data.get(
+            "gps_connected",
+            False
+        ),
+
+        "gps_last_update": data.get(
+            "last_update"
         ),
 
         # =========================
