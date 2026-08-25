@@ -724,6 +724,11 @@ def telemetry():
         0.0
     )
 
+    try:
+        motor_data_age = time.time() - float(motor_updated_at)
+    except (TypeError, ValueError):
+        motor_data_age = float("inf")
+
     # -----------------------------------------------------
     # DISPLAY SPEED
     # -----------------------------------------------------
@@ -735,7 +740,7 @@ def telemetry():
     # fallback.
     # -----------------------------------------------------
 
-    if motor_updated_at:
+    if motor_updated_at and motor_data_age <= 3.0:
 
         display_speed = motor_speed_mps
 
@@ -780,6 +785,12 @@ def telemetry():
             False
         ),
 
+        "gps_valid": bool(
+            data.get("fix", False)
+            and data.get("latitude") is not None
+            and data.get("longitude") is not None
+        ),
+
         "speed_knots": speed_knots,
 
         "speed_kmh": data.get(
@@ -815,6 +826,8 @@ def telemetry():
         "motor_direction": motor_direction,
 
         "motor_updated_at": motor_updated_at,
+
+        "motor_data_age": motor_data_age,
 
         # =========================
         # GCS
