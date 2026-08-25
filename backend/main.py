@@ -4,6 +4,7 @@
 import serial
 import time
 import threading
+import os
 
 from video_stream import (
     start_web_server,
@@ -30,8 +31,8 @@ from motor_state import set_motor_data
 # CONFIG SERIAL STM32
 # =========================================================
 
-PORT = "/dev/ttyACM0"
-BAUDRATE = 115200
+PORT = os.getenv("STM32_DEVICE", "/dev/ttyACM0")
+BAUDRATE = int(os.getenv("STM32_BAUD", "115200"))
 
 
 # =========================================================
