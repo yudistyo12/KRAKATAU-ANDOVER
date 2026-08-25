@@ -12,7 +12,7 @@ import os
 
 GPS_PORT = os.getenv("GPS_DEVICE", "/dev/ttyUSB0")
 PORT = "/dev/ttyACM0"
-GPS_BAUD = int(os.getenv("GPS_BAUD", "9600"))
+GPS_BAUD = int(os.getenv("GPS_BAUD", "115200"))
 GPS_BAUD_CANDIDATES = tuple(dict.fromkeys([
     GPS_BAUD,
     4800,
