@@ -4,6 +4,7 @@
 const API_BASE_URL = "http://192.168.1.102:5001";
 
 const CONFIG = {
+    HEARTBEAT: `${API_BASE_URL}/ping_gcs`,
     TELEMETRY: `${API_BASE_URL}/telemetry`,
     CAMERA: {
         SURFACE: `${API_BASE_URL}/surface_feed`,
@@ -16,6 +17,7 @@ const CONFIG = {
     },
     POLL_INTERVALS: {
         TELEMETRY: 1000,
+        HEARTBEAT: 1000,
         SNAPSHOTS: 5000
     }
 };

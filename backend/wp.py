@@ -306,7 +306,8 @@ def main():
         ser = serial.Serial(
             PORT,
             BAUDRATE,
-            timeout=1
+            timeout=1,
+            exclusive=True
         )
 
         time.sleep(2)

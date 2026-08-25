@@ -1526,7 +1526,8 @@ def main():
         ser = serial.Serial(
             PORT,
             BAUDRATE,
-            timeout=0.05
+            timeout=0.05,
+            exclusive=True
         )
 
 

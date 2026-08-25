@@ -7,7 +7,7 @@ import time
 import threading
 import logging
 
-from flask import Flask, Response, send_from_directory, abort, jsonify
+from flask import Flask, Response, send_from_directory, abort, jsonify, request
 
 from gps import get_gps_data
 from motor_state import get_motor_data
@@ -42,6 +42,14 @@ UNDERWATER_PHOTO_DIR = os.path.join(
 
 STREAM_HOST = "0.0.0.0"
 STREAM_PORT = 5001
+ALLOWED_ORIGINS = {
+    origin.strip()
+    for origin in os.getenv(
+        "GCS_ALLOWED_ORIGINS",
+        "null,http://localhost:5500,http://127.0.0.1:5500,http://192.168.1.102:5500"
+    ).split(",")
+    if origin.strip()
+}
 
 
 # =========================================================
@@ -565,9 +573,15 @@ app = Flask(__name__)
 @app.after_request
 def _add_cors_headers(response):
 
-    response.headers[
-        "Access-Control-Allow-Origin"
-    ] = "*"
+    origin = request.headers.get("Origin")
+
+    if origin in ALLOWED_ORIGINS:
+        response.headers[
+            "Access-Control-Allow-Origin"
+        ] = origin
+        response.headers[
+            "Vary"
+        ] = "Origin"
 
     response.headers[
         "Access-Control-Allow-Methods"
@@ -609,10 +623,6 @@ def ping_gcs():
 
 @app.route("/telemetry")
 def telemetry():
-
-    # Request telemetry = GCS aktif
-    trigger_heartbeat()
-
     # -----------------------------------------------------
     # GPS
     # -----------------------------------------------------
@@ -863,9 +873,6 @@ def _mjpeg_generator(grabber):
 
     while True:
 
-        # Streaming request = GCS aktif
-        trigger_heartbeat()
-
         frame = grabber.get_frame()
 
         if frame is not None:
@@ -966,9 +973,6 @@ def _list_photos(photo_dir):
     "/api/photos/<camera>"
 )
 def api_list_photos(camera):
-
-    trigger_heartbeat()
-
     photo_dir = _PHOTO_DIRS.get(
         camera
     )
@@ -1015,9 +1019,6 @@ def get_photo_file(
     camera,
     filename
 ):
-
-    trigger_heartbeat()
-
     photo_dir = _PHOTO_DIRS.get(
         camera
     )
@@ -1040,9 +1041,6 @@ def get_photo_file(
     "/surface_feed"
 )
 def surface_feed():
-
-    trigger_heartbeat()
-
     return Response(
 
         _mjpeg_generator(
@@ -1065,9 +1063,6 @@ def surface_feed():
     "/underwater_feed"
 )
 def underwater_feed():
-
-    trigger_heartbeat()
-
     return Response(
 
         _mjpeg_generator(

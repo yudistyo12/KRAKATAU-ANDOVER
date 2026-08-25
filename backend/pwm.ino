@@ -41,6 +41,7 @@
 #define ESC1_PIN          PA7
 #define ESC2_PIN          PB0
 #define ESC_MIN_US        1000
+#define ESC_STOP_US       1500
 #define ESC_MAX_US        2000
 
 // =========================================================
@@ -61,9 +62,7 @@
 #define ESTIMATED_MAX_RPM       3000.0f
 #define ESTIMATED_MAX_SPEED_MPS 2.00f
 
-// Pada firmware ini 1000 us dipakai sebagai STOP.
-// Karena itu REVERSE tidak dapat dibedakan dari STOP hanya dari PWM.
-#define MOTOR_STOP_THRESHOLD_US 1005
+#define MOTOR_STOP_THRESHOLD_US 1520
 
 // =========================================================
 // OBJECTS & VARIABLES
@@ -76,8 +75,8 @@ uint16_t channels[IBUS_CHANNELS];
 unsigned long lastIBUSPacket = 0;
 
 int autoServoAngle = 90;
-int autoESC1us = ESC_MIN_US;
-int autoESC2us = ESC_MIN_US;
+int autoESC1us = ESC_STOP_US;
+int autoESC2us = ESC_STOP_US;
 unsigned long lastAutoCmd = 0;
 unsigned long lastCompassSend = 0;
 unsigned long lastMotorSend = 0;
@@ -180,8 +179,8 @@ void setESC2(int us) {
 }
 
 void stopESC() {
-    setESC1(ESC_MIN_US);
-    setESC2(ESC_MIN_US);
+    setESC1(ESC_STOP_US);
+    setESC2(ESC_STOP_US);
 }
 
 // =========================================================
@@ -191,13 +190,18 @@ void stopESC() {
 float pwmToEstimatedRPM(int pwm) {
     pwm = constrain(pwm, ESC_MIN_US, ESC_MAX_US);
 
-    if (pwm <= MOTOR_STOP_THRESHOLD_US) {
+    if (abs(pwm - ESC_STOP_US) <= (MOTOR_STOP_THRESHOLD_US - ESC_STOP_US)) {
         return 0.0f;
     }
 
-    float ratio = (float)(pwm - MOTOR_STOP_THRESHOLD_US) /
-                  (float)(ESC_MAX_US - MOTOR_STOP_THRESHOLD_US);
+    if (pwm < ESC_STOP_US) {
+        float ratio = (float)(ESC_STOP_US - pwm) /
+                      (float)(ESC_STOP_US - ESC_MIN_US);
+        return -constrain(ratio, 0.0f, 1.0f) * ESTIMATED_MAX_RPM;
+    }
 
+    float ratio = (float)(pwm - ESC_STOP_US) /
+                  (float)(ESC_MAX_US - ESC_STOP_US);
     ratio = constrain(ratio, 0.0f, 1.0f);
 
     return ratio * ESTIMATED_MAX_RPM;
@@ -208,20 +212,16 @@ void updateMotorFeedback() {
     leftRPM = pwmToEstimatedRPM(currentESC1us);
     rightRPM = pwmToEstimatedRPM(currentESC2us);
 
-    if (leftRPM <= 0.0f && rightRPM <= 0.0f) {
+    float averageRPM = (leftRPM + rightRPM) * 0.5f;
+
+    if (abs(averageRPM) < 1.0f) {
         speedMps = 0.0f;
         motorDirection = "STOP";
     } else {
-        float averageRPM = (leftRPM + rightRPM) * 0.5f;
-
         speedMps = (averageRPM / ESTIMATED_MAX_RPM) *
                    ESTIMATED_MAX_SPEED_MPS;
 
-        if (speedMps < 0.0f) {
-            speedMps = 0.0f;
-        }
-
-        motorDirection = "FORWARD";
+        motorDirection = averageRPM > 0.0f ? "FORWARD" : "REVERSE";
     }
 }
 
@@ -254,11 +254,23 @@ void readPCCommand() {
                 int esc1Idx  = buffer.indexOf("ESC1=");
                 int esc2Idx  = buffer.indexOf("ESC2=");
 
-                if (servoIdx != -1) autoServoAngle = buffer.substring(servoIdx + 6).toInt();
-                if (esc1Idx != -1)  autoESC1us = buffer.substring(esc1Idx + 5).toInt();
-                if (esc2Idx != -1)  autoESC2us = buffer.substring(esc2Idx + 5).toInt();
+                if (servoIdx != -1 && esc1Idx != -1 && esc2Idx != -1) {
+                    int requestedServo = buffer.substring(servoIdx + 6).toInt();
+                    int requestedESC1 = buffer.substring(esc1Idx + 5).toInt();
+                    int requestedESC2 = buffer.substring(esc2Idx + 5).toInt();
 
-                lastAutoCmd = millis(); // Reset timeout mini PC
+                    if (requestedServo >= SERVO_MIN_ANGLE &&
+                        requestedServo <= SERVO_MAX_ANGLE &&
+                        requestedESC1 >= ESC_MIN_US &&
+                        requestedESC1 <= ESC_MAX_US &&
+                        requestedESC2 >= ESC_MIN_US &&
+                        requestedESC2 <= ESC_MAX_US) {
+                        autoServoAngle = requestedServo;
+                        autoESC1us = requestedESC1;
+                        autoESC2us = requestedESC2;
+                        lastAutoCmd = millis();
+                    }
+                }
             }
             buffer = "";
         } else {

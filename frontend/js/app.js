@@ -27,6 +27,17 @@ const GCSApp = {
         }).format(now);
     },
 
+    async sendHeartbeat() {
+        try {
+            await fetch(CONFIG.HEARTBEAT, {
+                method: 'GET',
+                cache: 'no-store'
+            });
+        } catch (error) {
+            console.error('[GCS] Heartbeat failed:', error);
+        }
+    },
+
     init() {
         const urlParams = new URLSearchParams(window.location.search);
         const selectedLane = urlParams.get('lane');
@@ -44,6 +55,8 @@ const GCSApp = {
         this.updateLaneDisplay();
         this.updateClock();
         setInterval(() => this.updateClock(), 1000);
+        this.sendHeartbeat();
+        setInterval(() => this.sendHeartbeat(), CONFIG.POLL_INTERVALS.HEARTBEAT);
         CameraManager.init();
         GPSRenderer.init();
 
