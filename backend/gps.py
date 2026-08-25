@@ -4,14 +4,15 @@ import serial
 import pynmea2
 import threading
 import time
+import os
 
 # =========================================================
 # CONFIG
 # =========================================================
 
-GPS_PORT = "/dev/ttyUSB0"
+GPS_PORT = os.getenv("GPS_DEVICE", "/dev/ttyUSB0")
 PORT = "/dev/ttyACM0"
-GPS_BAUD = 115200
+GPS_BAUD = int(os.getenv("GPS_BAUD", "115200"))
 
 # =========================================================
 # GPS DATA (shared, thread-safe)
@@ -39,6 +40,8 @@ _gps_lock = threading.Lock()
 _gps_thread = None
 _gps_serial = None
 _stop_event = threading.Event()
+_gga_fix = False
+_rmc_fix = False
 
 
 # =========================================================
@@ -48,6 +51,8 @@ _stop_event = threading.Event()
 def parse_nmea(line):
 
     global gps_data
+    global _gga_fix
+    global _rmc_fix
 
     try:
 
@@ -56,14 +61,14 @@ def parse_nmea(line):
         # Posisi + altitude + satellite + HDOP
         # -------------------------------------------------
 
-        if line.startswith("$GPGGA") or line.startswith("$GNGGA"):
+        msg = pynmea2.parse(line)
 
-            msg = pynmea2.parse(line)
+        if msg.sentence_type == "GGA":
 
             with _gps_lock:
 
                 if msg.gps_qual is not None:
-                    gps_data["fix"] = int(msg.gps_qual) > 0
+                    _gga_fix = int(msg.gps_qual) > 0
 
                 if msg.latitude and msg.longitude:
                     gps_data["latitude"] = msg.latitude
@@ -79,6 +84,7 @@ def parse_nmea(line):
                     gps_data["hdop"] = float(msg.horizontal_dil)
 
                 gps_data["timestamp"] = str(msg.timestamp)
+                gps_data["fix"] = _gga_fix or _rmc_fix
 
 
         # -------------------------------------------------
@@ -86,14 +92,11 @@ def parse_nmea(line):
         # Speed + Course
         # -------------------------------------------------
 
-        elif line.startswith("$GPRMC") or line.startswith("$GNRMC"):
-
-            msg = pynmea2.parse(line)
+        elif msg.sentence_type == "RMC":
 
             with _gps_lock:
 
-                # Status A = valid
-                gps_data["fix"] = msg.status == "A"
+                _rmc_fix = msg.status == "A"
 
                 if msg.latitude and msg.longitude:
                     gps_data["latitude"] = msg.latitude
@@ -112,6 +115,7 @@ def parse_nmea(line):
                     gps_data["course"] = float(msg.true_course)
 
                 gps_data["timestamp"] = str(msg.timestamp)
+                gps_data["fix"] = _gga_fix or _rmc_fix
 
     except Exception as e:
 

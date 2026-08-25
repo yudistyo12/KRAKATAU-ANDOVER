@@ -52,7 +52,7 @@ ALLOWED_ORIGINS = {
     origin.strip()
     for origin in os.getenv(
         "GCS_ALLOWED_ORIGINS",
-        "null,http://localhost:5500,http://127.0.0.1:5500,http://192.168.1.102:5500"
+        "null,http://localhost:5500,http://127.0.0.1:5500,http://192.168.1.102:5500,http://192.168.1.103:5500"
     ).split(",")
     if origin.strip()
 }
@@ -743,13 +743,11 @@ def telemetry():
     # fallback.
     # -----------------------------------------------------
 
-    if motor_updated_at and motor_data_age <= 3.0:
-
-        display_speed = motor_speed_mps
-
-    elif gps_speed_mps is not None:
-
+    if gps_speed_mps is not None:
         display_speed = gps_speed_mps
+
+    elif motor_updated_at and motor_data_age <= 3.0:
+        display_speed = motor_speed_mps
 
     else:
 
@@ -775,11 +773,7 @@ def telemetry():
 
         "speed": display_speed,
 
-        "course": (
-            course
-            if course is not None
-            else heading
-        ),
+        "course": course,
 
         "heading": heading,
 

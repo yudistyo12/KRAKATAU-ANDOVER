@@ -29,8 +29,7 @@ const VehicleState = {
     render(data) {
         this.data = data || {};
         const courseOrHeading = this.data.course ?? this.data.heading;
-        const hasCoordinates = this.data.gps_valid === true
-            && Number.isFinite(Number(this.data.lat))
+        const hasCoordinates = Number.isFinite(Number(this.data.lat))
             && Number.isFinite(Number(this.data.lon));
 
         if (this.dom.speed) {

@@ -29,12 +29,19 @@ const CameraManager = {
             });
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
-            const online = data.running && data.has_frame;
+            const image = document.getElementById(`${camera}-camera`);
+            const streamConnected = image && image.complete && image.naturalWidth > 0;
+            const online = (data.running && data.has_frame) || streamConnected;
             status.className = `camera-status ${online ? 'online' : 'offline'}`;
             status.innerHTML = `<span class="dot"></span> ${online ? 'ONLINE' : 'OFFLINE'}`;
         } catch (error) {
-            status.className = 'camera-status offline';
-            status.innerHTML = '<span class="dot"></span> OFFLINE';
+            const image = document.getElementById(`${camera}-camera`);
+            const streamConnected = image && image.complete && image.naturalWidth > 0;
+
+            if (!streamConnected) {
+                status.className = 'camera-status offline';
+                status.innerHTML = '<span class="dot"></span> OFFLINE';
+            }
         }
     },
 
