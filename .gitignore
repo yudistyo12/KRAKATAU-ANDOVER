@@ -8,3 +8,4 @@ surface/
 underwater/
 backend/surface/
 backend/underwater/
+backend/.venv/
