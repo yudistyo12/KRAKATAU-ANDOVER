@@ -943,9 +943,12 @@ def _mjpeg_generator(grabber):
                     + b"\r\n"
                 )
 
-        time.sleep(
-            1.0 / READ_FPS
-        )
+        else:
+            # Keep the request alive while the camera is starting.
+            time.sleep(0.1)
+            continue
+
+        time.sleep(1.0 / READ_FPS)
 
 
 # =========================================================
@@ -1216,9 +1219,6 @@ def start_web_server():
 # =========================================================
 
 def start_streaming():
-
-    start_web_server()
-
     print()
     print(
         "=========================================="
@@ -1238,6 +1238,10 @@ def start_streaming():
     underwater_ok = (
         _underwater_grabber.start()
     )
+
+    # Start Flask after camera initialization so new MJPEG clients
+    # receive a frame immediately instead of hanging on an empty stream.
+    start_web_server()
 
     print()
 
