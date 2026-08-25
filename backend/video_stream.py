@@ -771,7 +771,7 @@ def telemetry():
             "longitude"
         ),
 
-        "speed": display_speed,
+        "speed": display_speed if gps_speed_mps is not None else None,
 
         "course": course,
 
@@ -1179,6 +1179,11 @@ def start_streaming():
 
     start_web_server()
 
+    start_camera_streaming()
+
+
+def start_camera_streaming():
+
     print()
     print(
         "=========================================="
@@ -1219,6 +1224,11 @@ def start_streaming():
 # =========================================================
 
 def stop_streaming():
+
+    stop_camera_streaming()
+
+
+def stop_camera_streaming():
 
     print(
         "Menghentikan camera streaming..."

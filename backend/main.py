@@ -6,7 +6,9 @@ import time
 import threading
 
 from video_stream import (
-    start_streaming,
+    start_web_server,
+    start_camera_streaming,
+    stop_camera_streaming,
     stop_streaming,
     is_gcs_active,
     reset_heartbeat,
@@ -501,6 +503,8 @@ def read_mode(line):
             foto1 = True
             foto2 = True
 
+            start_camera_streaming()
+
 
             if heading is not None:
 
@@ -542,6 +546,8 @@ def read_mode(line):
 
             reset_pid()
 
+            stop_camera_streaming()
+
 
             print()
             print(
@@ -572,6 +578,8 @@ def read_mode(line):
             target_heading = None
 
             reset_pid()
+
+            stop_camera_streaming()
 
 
             print()
@@ -1519,10 +1527,10 @@ def main():
         # =================================================
 
         print(
-            "Memulai Web Server dan kamera..."
+            "Memulai Web Server..."
         )
 
-        start_streaming()
+        start_web_server()
 
 
         # =================================================
