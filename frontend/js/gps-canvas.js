@@ -40,6 +40,43 @@ const GPSRenderer = {
         return this.plotTop + ((this.maxLat - lat) / (this.maxLat - this.minLat)) * (H - this.plotTop - this.plotBottom);
     },
 
+    getGeographicBounds() {
+        const gps = window.GPSData;
+        const telemetry = gps ? gps.data : null;
+        const points = gps ? [...gps.pathHistory] : [];
+        const current = telemetry && Number.isFinite(Number(telemetry.lat))
+            && Number.isFinite(Number(telemetry.lon))
+            ? { lat: Number(telemetry.lat), lon: Number(telemetry.lon) }
+            : null;
+
+        if (current) points.push(current);
+        if (!points.length) return null;
+
+        const latitudes = points.map(point => point.lat);
+        const longitudes = points.map(point => point.lon);
+        const latCenter = (Math.min(...latitudes) + Math.max(...latitudes)) / 2;
+        const lonCenter = (Math.min(...longitudes) + Math.max(...longitudes)) / 2;
+        const latSpan = Math.max(Math.max(...latitudes) - Math.min(...latitudes), 0.0001);
+        const lonSpan = Math.max(Math.max(...longitudes) - Math.min(...longitudes), 0.0001);
+
+        return {
+            minLat: latCenter - latSpan * 0.6,
+            maxLat: latCenter + latSpan * 0.6,
+            minLon: lonCenter - lonSpan * 0.6,
+            maxLon: lonCenter + lonSpan * 0.6,
+            points,
+            current
+        };
+    },
+
+    mapGeographicPoint(point, bounds, W, H) {
+        const x = this.plotLeft + ((point.lon - bounds.minLon) / (bounds.maxLon - bounds.minLon))
+            * (W - this.plotLeft - this.plotRight);
+        const y = this.plotTop + ((bounds.maxLat - point.lat) / (bounds.maxLat - bounds.minLat))
+            * (H - this.plotTop - this.plotBottom);
+        return { x, y };
+    },
+
     draw() {
         if (!this.canvas || !this.ctx) return;
         const ctx = this.ctx;
@@ -209,16 +246,18 @@ const GPSRenderer = {
         ctx.restore();
 
         // Actual Trajectory
-        const pathHistory = window.GPSData ? window.GPSData.visualHistory : [];
-        if (pathHistory && pathHistory.length > 0) {
+        const geographicBounds = this.getGeographicBounds();
+        const pathHistory = geographicBounds ? geographicBounds.points : [];
+        if (pathHistory.length > 0) {
             ctx.beginPath();
             ctx.strokeStyle = 'rgba(30, 64, 175, 0.6)';
             ctx.lineWidth = 2;
             ctx.setLineDash([6, 4]);
 
             pathHistory.forEach((pt, idx) => {
-                const x = MARGIN_L + pt.x * COL_W * 4;
-                const y = MARGIN_T + (1 - pt.y) * ROW_H * 4;
+                const position = this.mapGeographicPoint(pt, geographicBounds, W, H);
+                const x = position.x;
+                const y = position.y;
                 if (idx === 0) ctx.moveTo(x, y);
                 else ctx.lineTo(x, y);
             });
@@ -226,8 +265,9 @@ const GPSRenderer = {
             ctx.setLineDash([]);
 
             pathHistory.forEach(pt => {
-                const x = MARGIN_L + pt.x * COL_W * 4;
-                const y = MARGIN_T + (1 - pt.y) * ROW_H * 4;
+                const position = this.mapGeographicPoint(pt, geographicBounds, W, H);
+                const x = position.x;
+                const y = position.y;
                 ctx.beginPath();
                 ctx.arc(x, y, 3, 0, Math.PI * 2);
                 ctx.fillStyle = '#1e40af';
@@ -240,7 +280,11 @@ const GPSRenderer = {
         const visualPosition = window.GPSData ? window.GPSData.visualPosition : null;
         let shipX, shipY;
 
-        if (visualPosition && Number.isFinite(visualPosition.x) && Number.isFinite(visualPosition.y)) {
+        if (geographicBounds && geographicBounds.current) {
+            const position = this.mapGeographicPoint(geographicBounds.current, geographicBounds, W, H);
+            shipX = position.x;
+            shipY = position.y;
+        } else if (visualPosition && Number.isFinite(visualPosition.x) && Number.isFinite(visualPosition.y)) {
             shipX = MARGIN_L + visualPosition.x * COL_W * 4;
             shipY = MARGIN_T + (1 - visualPosition.y) * ROW_H * 4;
         } else {

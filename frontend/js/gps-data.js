@@ -17,12 +17,28 @@ const GPSData = {
     visualPosition: null,
     visualHistory: [],
     lastMotionTime: null,
+    sessionId: null,
+
+    normalizeTelemetry(data) {
+        const telemetry = data || {};
+        const speed = telemetry.speed ?? telemetry.speed_knots ?? null;
+
+        return {
+            ...telemetry,
+            lat: telemetry.lat ?? telemetry.latitude ?? null,
+            lon: telemetry.lon ?? telemetry.longitude ?? null,
+            speed,
+            course: telemetry.course ?? telemetry.course_over_ground ?? null,
+            fix: Boolean(telemetry.fix ?? telemetry.gps_valid)
+        };
+    },
 
     updateVisualMotion(data) {
         const now = performance.now();
         const elapsed = this.lastMotionTime === null ? 0 : Math.min((now - this.lastMotionTime) / 1000, 1);
         const heading = Number(data.heading ?? data.course);
-        const speed = Number(data.motor_speed_mps ?? data.speed) || 0;
+        const speed = Number(data.motor_speed_mps ?? data.gps_speed_mps
+            ?? data.speed) || 0;
 
         if (!this.visualPosition) {
             const lane = new URLSearchParams(window.location.search).get('lane');
@@ -44,6 +60,13 @@ const GPSData = {
         }
     },
 
+    resetForNewSession() {
+        this.pathHistory = [];
+        this.visualHistory = [];
+        this.visualPosition = null;
+        this.lastMotionTime = null;
+    },
+
     async fetch() {
         if (this.fetchInProgress) return;
         this.fetchInProgress = true;
@@ -58,7 +81,11 @@ const GPSData = {
             });
             if (!response.ok) throw new Error('GPS telemetry request failed');
 
-            const data = await response.json();
+            const data = this.normalizeTelemetry(await response.json());
+            if (data.session_id && this.sessionId && data.session_id !== this.sessionId) {
+                this.resetForNewSession();
+            }
+            if (data.session_id) this.sessionId = data.session_id;
             this.data = data;
             this.lastSuccessfulFetch = Date.now();
             this.updateVisualMotion(data);
@@ -79,11 +106,6 @@ const GPSData = {
             console.error('[GCS] Error fetching GPS telemetry:', error);
             this.data = {
                 ...this.data,
-                lat: null,
-                lon: null,
-                speed: null,
-                course: null,
-                heading: null,
                 gps_valid: false
             };
         } finally {
@@ -96,17 +118,8 @@ const GPSData = {
         if (window.GPSRenderer) window.GPSRenderer.draw();
     },
 
-    clearPath() {
-        this.pathHistory = [];
-        this.visualHistory = this.visualPosition ? [{ ...this.visualPosition }] : [];
-        if (window.VehicleState) window.VehicleState.pathHistory = this.pathHistory;
-        if (window.GPSRenderer) window.GPSRenderer.draw();
-    }
 };
 
 window.GPSData = GPSData;
 setInterval(() => GPSData.fetch(), CONFIG.POLL_INTERVALS.TELEMETRY);
 GPSData.fetch();
-
-const clearPathBtn = document.getElementById('btn-clear-path');
-if (clearPathBtn) clearPathBtn.addEventListener('click', () => GPSData.clearPath());

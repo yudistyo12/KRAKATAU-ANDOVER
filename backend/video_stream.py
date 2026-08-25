@@ -6,6 +6,7 @@ import os
 import time
 import threading
 import logging
+import uuid
 
 from flask import Flask, Response, send_from_directory, send_file, abort, jsonify, request
 
@@ -19,6 +20,8 @@ from motor_state import get_motor_data
 
 log = logging.getLogger("werkzeug")
 log.setLevel(logging.ERROR)
+
+TELEMETRY_SESSION_ID = uuid.uuid4().hex
 
 
 # =========================================================
@@ -733,27 +736,6 @@ def telemetry():
         motor_data_age = float("inf")
 
     # -----------------------------------------------------
-    # DISPLAY SPEED
-    # -----------------------------------------------------
-    #
-    # Motor feedback diprioritaskan.
-    #
-    # Jika motor_state belum menerima data STM32,
-    # speed motor default 0.0 sehingga GPS menjadi
-    # fallback.
-    # -----------------------------------------------------
-
-    if gps_speed_mps is not None:
-        display_speed = gps_speed_mps
-
-    elif motor_updated_at and motor_data_age <= 3.0:
-        display_speed = motor_speed_mps
-
-    else:
-
-        display_speed = 0.0
-
-    # -----------------------------------------------------
     # RESPONSE
     # -----------------------------------------------------
 
@@ -771,7 +753,11 @@ def telemetry():
             "longitude"
         ),
 
-        "speed": display_speed if gps_speed_mps is not None else None,
+        "speed": speed_knots if speed_knots is not None else None,
+
+        "gps_speed_mps": gps_speed_mps,
+
+        "session_id": TELEMETRY_SESSION_ID,
 
         "course": course,
 

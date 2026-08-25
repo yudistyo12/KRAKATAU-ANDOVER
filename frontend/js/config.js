@@ -22,6 +22,7 @@ const CONFIG = {
     POLL_INTERVALS: {
         TELEMETRY: 1000,
         HEARTBEAT: 1000,
-        SNAPSHOTS: 1000
+        SNAPSHOTS: 1000,
+        CAMERA_REFRESH: 5000
     }
 };

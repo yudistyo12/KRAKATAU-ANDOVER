@@ -16,7 +16,8 @@ const VehicleState = {
         speed: document.getElementById('data-speed'),
         course: document.getElementById('data-course'),
         lat: document.getElementById('data-lat'),
-        lon: document.getElementById('data-lon')
+        lon: document.getElementById('data-lon'),
+        coordinates: document.getElementById('header-coordinates')
     },
 
     formatValue(value, decimals, suffix = '') {
@@ -26,6 +27,20 @@ const VehicleState = {
             : '--';
     },
 
+    formatCoordinate(value, isLatitude) {
+        const number = Number(value);
+        if (!Number.isFinite(number)) return null;
+
+        const hemisphere = isLatitude
+            ? (number < 0 ? 'S' : 'N')
+            : (number < 0 ? 'W' : 'E');
+        const absolute = Math.abs(number);
+        const degrees = Math.floor(absolute);
+        const minutes = (absolute - degrees) * 60;
+
+        return `${hemisphere} ${degrees}° ${minutes.toFixed(4).replace('.', ',')}'`;
+    },
+
     render(data) {
         this.data = data || {};
         const courseOrHeading = this.data.course ?? this.data.heading;
@@ -33,7 +48,7 @@ const VehicleState = {
             && Number.isFinite(Number(this.data.lon));
 
         if (this.dom.speed) {
-            this.dom.speed.textContent = this.formatValue(this.data.speed, 1, ' m/s');
+            this.dom.speed.textContent = this.formatValue(this.data.speed, 1, ' knots');
         }
         if (this.dom.course) {
             this.dom.course.textContent = this.formatValue(courseOrHeading, 1, ' °');
@@ -44,10 +59,13 @@ const VehicleState = {
         if (this.dom.lon) {
             this.dom.lon.textContent = hasCoordinates ? this.formatValue(this.data.lon, 6) : '--';
         }
-    },
-
-    clearPath() {
-        GPSData.clearPath();
+        if (this.dom.coordinates) {
+            const latitude = this.formatCoordinate(this.data.lat, true);
+            const longitude = this.formatCoordinate(this.data.lon, false);
+            this.dom.coordinates.textContent = latitude && longitude
+                ? `[${latitude} ${longitude}]`
+                : '--';
+        }
     }
 };
 

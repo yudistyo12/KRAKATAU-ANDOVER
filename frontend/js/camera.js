@@ -9,7 +9,8 @@ const CameraManager = {
         this.setupStream('surface-camera', 'surface-error', 'surface-camera-status', CONFIG.CAMERA.SURFACE);
         this.setupStream('underwater-camera', 'underwater-error', 'underwater-camera-status', CONFIG.CAMERA.UNDERWATER);
         this.checkStatus();
-        setInterval(() => this.checkStatus(), 3000);
+        setInterval(() => this.checkStatus(), CONFIG.POLL_INTERVALS.CAMERA_REFRESH);
+        setInterval(() => this.refreshStreams(), CONFIG.POLL_INTERVALS.CAMERA_REFRESH);
     },
 
     async checkStatus() {
@@ -95,6 +96,19 @@ const CameraManager = {
             img.src = `${streamUrl}${streamUrl.includes('?') ? '&' : '?'}t=${Date.now()}`;
             img.style.display = 'block';
         }, 3000);
+    },
+
+    refreshStreams() {
+        [
+            ['surface-camera', CONFIG.CAMERA.SURFACE],
+            ['underwater-camera', CONFIG.CAMERA.UNDERWATER]
+        ].forEach(([imgId, streamUrl]) => {
+            const image = document.getElementById(imgId);
+            if (!image) return;
+
+            image.src = `${streamUrl}${streamUrl.includes('?') ? '&' : '?'}t=${Date.now()}`;
+            image.style.display = 'block';
+        });
     },
 
     getPhotoPath(photo) {
