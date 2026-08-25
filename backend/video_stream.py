@@ -652,6 +652,11 @@ def telemetry():
 
     course = data.get("course")
     heading = data.get("heading")
+    gps_fix = bool(
+        data.get("fix", False)
+        and data.get("latitude") is not None
+        and data.get("longitude") is not None
+    )
 
     # -----------------------------------------------------
     # MOTOR
@@ -763,15 +768,12 @@ def telemetry():
 
         "heading": heading,
 
-        "fix": data.get(
-            "fix",
-            False
-        ),
+        "fix": gps_fix,
 
-        "gps_valid": bool(
-            data.get("fix", False)
-            and data.get("latitude") is not None
-            and data.get("longitude") is not None
+        "gps_valid": gps_fix,
+
+        "gps_timestamp": data.get(
+            "timestamp"
         ),
 
         "speed_knots": speed_knots,

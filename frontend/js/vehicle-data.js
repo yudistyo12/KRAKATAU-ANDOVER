@@ -44,14 +44,22 @@ const VehicleState = {
     render(data) {
         this.data = data || {};
         const courseOrHeading = this.data.course ?? this.data.heading;
-        const hasCoordinates = Number.isFinite(Number(this.data.lat))
+        const gpsIsValid = Boolean(this.data.fix ?? this.data.gps_valid);
+        const hasCoordinates = gpsIsValid
+            && Number.isFinite(Number(this.data.lat))
             && Number.isFinite(Number(this.data.lon));
+        const hasSpeed = gpsIsValid && Number.isFinite(Number(this.data.speed));
+        const hasCourse = gpsIsValid && Number.isFinite(Number(courseOrHeading));
 
         if (this.dom.speed) {
-            this.dom.speed.textContent = this.formatValue(this.data.speed, 1, ' knots');
+            this.dom.speed.textContent = hasSpeed
+                ? this.formatValue(this.data.speed, 1, ' knots')
+                : '--';
         }
         if (this.dom.course) {
-            this.dom.course.textContent = this.formatValue(courseOrHeading, 1, ' °');
+            this.dom.course.textContent = hasCourse
+                ? this.formatValue(courseOrHeading, 1, ' °')
+                : '--';
         }
         if (this.dom.lat) {
             this.dom.lat.textContent = hasCoordinates ? this.formatValue(this.data.lat, 6) : '--';
