@@ -217,6 +217,12 @@ class _CameraGrabber:
         )
 
         if not self.cap.isOpened():
+            self.cap.release()
+            self.cap = cv2.VideoCapture(
+                self.camera_index
+            )
+
+        if not self.cap.isOpened():
 
             print(
                 f"ERROR: kamera {self.label} "
@@ -297,7 +303,14 @@ class _CameraGrabber:
             cv2.CAP_PROP_FPS
         )
 
-        ret, first_frame = self.cap.read()
+        ret = False
+        first_frame = None
+
+        for attempt in range(10):
+            ret, first_frame = self.cap.read()
+            if ret and first_frame is not None:
+                break
+            time.sleep(0.1)
 
         if not ret or first_frame is None:
             print(
