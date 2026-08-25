@@ -8,7 +8,6 @@ import threading
 from video_stream import (
     start_streaming,
     stop_streaming,
-    start_web_server,
     is_gcs_active,
     reset_heartbeat,
     capture_surface_photo,
@@ -511,13 +510,6 @@ def read_mode(line):
                         heading
                     )
                 )
-
-
-            # Start camera
-            threading.Thread(
-                target=start_streaming,
-                daemon=True
-            ).start()
 
 
             print()
@@ -1507,10 +1499,10 @@ def main():
         # =================================================
 
         print(
-            "Memulai Web Server..."
+            "Memulai Web Server dan kamera..."
         )
 
-        start_web_server()
+        start_streaming()
 
 
         # =================================================

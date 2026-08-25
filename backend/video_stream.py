@@ -25,8 +25,14 @@ log.setLevel(logging.ERROR)
 # CONFIG
 # =========================================================
 
-SURFACE_CAMERA_INDEX = 0
-UNDERWATER_CAMERA_INDEX = 2
+SURFACE_CAMERA_INDEX = os.getenv(
+    "SURFACE_CAMERA_DEVICE",
+    "/dev/video0"
+)
+UNDERWATER_CAMERA_INDEX = os.getenv(
+    "UNDERWATER_CAMERA_DEVICE",
+    "/dev/video2"
+)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -198,7 +204,7 @@ class _CameraGrabber:
 
         print(
             f"Membuka kamera {self.label} "
-            f"/dev/video{self.camera_index}..."
+            f"{self.camera_index}..."
         )
 
         # -------------------------------------------------
@@ -290,6 +296,26 @@ class _CameraGrabber:
         actual_fps = self.cap.get(
             cv2.CAP_PROP_FPS
         )
+
+        ret, first_frame = self.cap.read()
+
+        if not ret or first_frame is None:
+            print(
+                f"ERROR: kamera {self.label} terbuka, "
+                "tetapi tidak mengirim frame"
+            )
+            self.cap.release()
+            self.cap = None
+            return False
+
+        if self.rotate_left:
+            first_frame = cv2.rotate(
+                first_frame,
+                cv2.ROTATE_90_COUNTERCLOCKWISE
+            )
+
+        with self.frame_lock:
+            self.latest_frame = first_frame
 
         print(
             f"Kamera {self.label}: "
