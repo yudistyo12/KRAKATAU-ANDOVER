@@ -489,37 +489,8 @@ class _CameraGrabber:
     def get_frame(self):
 
         with self.frame_lock:
-
             return self.latest_frame
 
-    # =====================================================
-    # SAVE SNAPSHOT
-    # =====================================================
-
-    def save_snapshot(self, save_dir):
-
-        frame = self.get_frame()
-
-        if frame is None:
-
-            print(
-                f"ERROR: belum ada frame "
-                f"{self.label}"
-            )
-
-            return None
-
-        # -------------------------------------------------
-        # CREATE DIRECTORY
-        # -------------------------------------------------
-
-        os.makedirs(
-            save_dir,
-            exist_ok=True
-        )
-
-        # -------------------------------------------------
-        # FILENAME
         # -------------------------------------------------
 
         filename = os.path.join(
@@ -648,7 +619,6 @@ def _add_cors_headers(response):
 def ping_gcs():
 
     trigger_heartbeat()
-
     return jsonify({
         "status": "ok",
         "gcs_active": True,
@@ -656,52 +626,26 @@ def ping_gcs():
     }), 200
 
 
-# =========================================================
-# TELEMETRY
-# =========================================================
-
 @app.route("/telemetry")
 def telemetry():
-    # -----------------------------------------------------
-    # GPS
-    # -----------------------------------------------------
 
     data = get_gps_data()
 
     if data is None:
         data = {}
 
-    speed_knots = data.get(
-        "speed_knots"
-    )
+    speed_knots = data.get("speed_knots")
 
     if speed_knots is not None:
-
         try:
-
-            gps_speed_mps = (
-                float(speed_knots)
-                * 0.514444
-            )
-
-        except (
-            ValueError,
-            TypeError
-        ):
-
+            gps_speed_mps = float(speed_knots) * 0.514444
+        except (ValueError, TypeError):
             gps_speed_mps = None
-
     else:
-
         gps_speed_mps = None
 
-    course = data.get(
-        "course"
-    )
-
-    heading = data.get(
-        "heading"
-    )
+    course = data.get("course")
+    heading = data.get("heading")
 
     # -----------------------------------------------------
     # MOTOR
@@ -1124,6 +1068,27 @@ def surface_feed():
             " boundary=frame"
         )
     )
+
+
+@app.route(
+    "/camera_status/<camera>"
+)
+def camera_status(camera):
+    grabber = {
+        "surface": _surface_grabber,
+        "underwater": _underwater_grabber
+    }.get(camera)
+
+    if grabber is None:
+        abort(404)
+
+    return jsonify({
+        "camera": camera,
+        "running": grabber.running,
+        "has_frame": grabber.get_frame() is not None
+    })
+
+
 
 
 # =========================================================

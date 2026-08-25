@@ -8,7 +8,9 @@ const CONFIG = {
     TELEMETRY: `${API_BASE_URL}/telemetry`,
     CAMERA: {
         SURFACE: `${API_BASE_URL}/surface_feed`,
-        UNDERWATER: `${API_BASE_URL}/underwater_feed`
+        UNDERWATER: `${API_BASE_URL}/underwater_feed`,
+        STATUS_SURFACE: `${API_BASE_URL}/camera_status/surface`,
+        STATUS_UNDERWATER: `${API_BASE_URL}/camera_status/underwater`
     },
     
     PHOTOS: {

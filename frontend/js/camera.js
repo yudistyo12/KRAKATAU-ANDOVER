@@ -8,6 +8,34 @@ const CameraManager = {
     init() {
         this.setupStream('surface-camera', 'surface-error', 'surface-camera-status', CONFIG.CAMERA.SURFACE);
         this.setupStream('underwater-camera', 'underwater-error', 'underwater-camera-status', CONFIG.CAMERA.UNDERWATER);
+        this.checkStatus();
+        setInterval(() => this.checkStatus(), 3000);
+    },
+
+    async checkStatus() {
+        await Promise.all([
+            this.checkCameraStatus('surface', CONFIG.CAMERA.STATUS_SURFACE),
+            this.checkCameraStatus('underwater', CONFIG.CAMERA.STATUS_UNDERWATER)
+        ]);
+    },
+
+    async checkCameraStatus(camera, statusUrl) {
+        const status = document.getElementById(`${camera}-camera-status`);
+        if (!status) return;
+
+        try {
+            const response = await fetch(`${statusUrl}?t=${Date.now()}`, {
+                cache: 'no-store'
+            });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            const online = data.running && data.has_frame;
+            status.className = `camera-status ${online ? 'online' : 'offline'}`;
+            status.innerHTML = `<span class="dot"></span> ${online ? 'ONLINE' : 'OFFLINE'}`;
+        } catch (error) {
+            status.className = 'camera-status offline';
+            status.innerHTML = '<span class="dot"></span> OFFLINE';
+        }
     },
 
     setupStream(imgId, errorId, statusId, streamUrl) {
@@ -22,7 +50,7 @@ const CameraManager = {
         img.style.display = 'block';
 
         img.onerror = () => {
-            img.style.display = 'none';
+            img.style.display = 'block';
             if (err) err.style.display = 'flex';
             if (status) {
                 status.textContent = 'OFFLINE';
