@@ -149,7 +149,6 @@ UNDERWATER_FORMAT = "MJPG"
 
 READ_FPS = 20.0
 JPEG_QUALITY = 80
-ACTIVE_CAMERA_DEVICES = set()
 
 
 # =========================================================
@@ -212,42 +211,16 @@ class _CameraGrabber:
         # V4L2
         # -------------------------------------------------
 
-        candidates = [self.camera_index]
-        for index in range(10):
-            device = f"/dev/video{index}"
-            if device not in candidates and device not in ACTIVE_CAMERA_DEVICES:
-                candidates.append(device)
+        self.cap = cv2.VideoCapture(
+            self.camera_index,
+            cv2.CAP_V4L2
+        )
 
-        candidates = [
-            candidate
-            for candidate in candidates
-            if candidate not in ACTIVE_CAMERA_DEVICES
-        ]
-
-        self.cap = None
-        selected_device = None
-
-        for candidate in candidates:
-            capture = cv2.VideoCapture(
-                candidate,
-                cv2.CAP_V4L2
+        if not self.cap.isOpened():
+            self.cap.release()
+            self.cap = cv2.VideoCapture(
+                self.camera_index
             )
-
-            if capture.isOpened():
-                self.cap = capture
-                selected_device = candidate
-                break
-
-            capture.release()
-
-        if self.cap is None:
-            for candidate in candidates:
-                capture = cv2.VideoCapture(candidate)
-                if capture.isOpened():
-                    self.cap = capture
-                    selected_device = candidate
-                    break
-                capture.release()
 
         if not self.cap.isOpened():
 
@@ -259,9 +232,6 @@ class _CameraGrabber:
             self.cap = None
 
             return False
-
-        self.camera_index = selected_device
-        ACTIVE_CAMERA_DEVICES.add(selected_device)
 
         # -------------------------------------------------
         # PIXEL FORMAT
@@ -498,8 +468,6 @@ class _CameraGrabber:
                 )
 
             self.cap = None
-
-        ACTIVE_CAMERA_DEVICES.discard(self.camera_index)
 
         # -------------------------------------------------
         # CLEAR FRAME
@@ -782,7 +750,8 @@ def telemetry():
         display_speed = motor_speed_mps
 
     else:
-        display_speed = None
+
+        display_speed = 0.0
 
     # -----------------------------------------------------
     # RESPONSE
@@ -839,15 +808,6 @@ def telemetry():
 
         "timestamp": data.get(
             "timestamp"
-        ),
-
-        "gps_connected": data.get(
-            "gps_connected",
-            False
-        ),
-
-        "gps_last_update": data.get(
-            "last_update"
         ),
 
         # =========================
@@ -943,12 +903,9 @@ def _mjpeg_generator(grabber):
                     + b"\r\n"
                 )
 
-        else:
-            # Keep the request alive while the camera is starting.
-            time.sleep(0.1)
-            continue
-
-        time.sleep(1.0 / READ_FPS)
+        time.sleep(
+            1.0 / READ_FPS
+        )
 
 
 # =========================================================
@@ -1109,7 +1066,7 @@ def get_photo_file(
     "/surface_feed"
 )
 def surface_feed():
-    response = Response(
+    return Response(
 
         _mjpeg_generator(
             _surface_grabber
@@ -1121,10 +1078,6 @@ def surface_feed():
             " boundary=frame"
         )
     )
-    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
-    response.headers["Pragma"] = "no-cache"
-    response.headers["Connection"] = "keep-alive"
-    return response
 
 
 @app.route(
@@ -1156,7 +1109,7 @@ def camera_status(camera):
     "/underwater_feed"
 )
 def underwater_feed():
-    response = Response(
+    return Response(
 
         _mjpeg_generator(
             _underwater_grabber
@@ -1168,10 +1121,6 @@ def underwater_feed():
             " boundary=frame"
         )
     )
-    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
-    response.headers["Pragma"] = "no-cache"
-    response.headers["Connection"] = "keep-alive"
-    return response
 
 
 # =========================================================
@@ -1227,6 +1176,9 @@ def start_web_server():
 # =========================================================
 
 def start_streaming():
+
+    start_web_server()
+
     print()
     print(
         "=========================================="
@@ -1246,10 +1198,6 @@ def start_streaming():
     underwater_ok = (
         _underwater_grabber.start()
     )
-
-    # Start Flask after camera initialization so new MJPEG clients
-    # receive a frame immediately instead of hanging on an empty stream.
-    start_web_server()
 
     print()
 
