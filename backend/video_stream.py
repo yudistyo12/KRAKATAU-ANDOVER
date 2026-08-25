@@ -5,10 +5,20 @@ import cv2
 import os
 import time
 import threading
+import logging
 
 from flask import Flask, Response, send_from_directory, abort, jsonify
 
 from gps import get_gps_data
+from motor_state import get_motor_data
+
+
+# =========================================================
+# SILENCE HTTP REQUEST LOGS
+# =========================================================
+
+log = logging.getLogger("werkzeug")
+log.setLevel(logging.ERROR)
 
 
 # =========================================================
@@ -35,14 +45,67 @@ STREAM_PORT = 5001
 
 
 # =========================================================
+# HEARTBEAT / GCS FAILSAFE
+# =========================================================
+
+last_gcs_heartbeat = time.time()
+
+heartbeat_lock = threading.Lock()
+
+
+def trigger_heartbeat():
+    """
+    Memperbarui waktu terakhir GCS aktif.
+    """
+    global last_gcs_heartbeat
+
+    with heartbeat_lock:
+        last_gcs_heartbeat = time.time()
+
+
+def reset_heartbeat():
+    """
+    Reset heartbeat GCS.
+    """
+    global last_gcs_heartbeat
+
+    with heartbeat_lock:
+        last_gcs_heartbeat = time.time()
+
+
+def is_gcs_active(timeout=3.0):
+    """
+    True jika GCS masih aktif dalam batas timeout.
+    """
+
+    with heartbeat_lock:
+        elapsed = time.time() - last_gcs_heartbeat
+
+    return elapsed <= timeout
+
+
+def get_heartbeat_age():
+    """
+    Mengembalikan umur heartbeat dalam detik.
+    """
+
+    with heartbeat_lock:
+        return time.time() - last_gcs_heartbeat
+
+
+# =========================================================
 # CAMERA CONFIG
 # =========================================================
 
-# Surface:
-# /dev/video2
+# ---------------------------------------------------------
+# SURFACE CAMERA
+# ---------------------------------------------------------
+#
+# /dev/video0
 # YUYV
 # 640x480
 # 30 FPS
+#
 
 SURFACE_WIDTH = 640
 SURFACE_HEIGHT = 480
@@ -50,11 +113,15 @@ SURFACE_FPS = 30
 SURFACE_FORMAT = "YUYV"
 
 
-# Underwater:
-# /dev/video0
+# ---------------------------------------------------------
+# UNDERWATER CAMERA
+# ---------------------------------------------------------
+#
+# /dev/video2
 # MJPG
 # 640x480
 # 30 FPS
+#
 
 UNDERWATER_WIDTH = 640
 UNDERWATER_HEIGHT = 480
@@ -62,9 +129,9 @@ UNDERWATER_FPS = 30
 UNDERWATER_FORMAT = "MJPG"
 
 
-# =========================================================
-# STREAM CONFIG
-# =========================================================
+# ---------------------------------------------------------
+# STREAM
+# ---------------------------------------------------------
 
 READ_FPS = 20.0
 JPEG_QUALITY = 80
@@ -93,12 +160,13 @@ class _CameraGrabber:
         self.width = width
         self.height = height
         self.fps = fps
+
         self.pixel_format = pixel_format
-        
         self.rotate_left = rotate_left
 
         self.cap = None
         self.thread = None
+
         self.running = False
 
         self.latest_frame = None
@@ -106,7 +174,7 @@ class _CameraGrabber:
         self.frame_lock = threading.Lock()
 
     # =====================================================
-    # START
+    # START CAMERA
     # =====================================================
 
     def start(self):
@@ -118,16 +186,16 @@ class _CameraGrabber:
                 f"sudah berjalan"
             )
 
-            return
+            return True
 
         print(
             f"Membuka kamera {self.label} "
             f"/dev/video{self.camera_index}..."
         )
 
-        # =================================================
-        # PAKAI V4L2 LANGSUNG
-        # =================================================
+        # -------------------------------------------------
+        # V4L2
+        # -------------------------------------------------
 
         self.cap = cv2.VideoCapture(
             self.camera_index,
@@ -143,11 +211,11 @@ class _CameraGrabber:
 
             self.cap = None
 
-            return
+            return False
 
-        # =================================================
-        # SET PIXEL FORMAT
-        # =================================================
+        # -------------------------------------------------
+        # PIXEL FORMAT
+        # -------------------------------------------------
 
         fourcc = cv2.VideoWriter_fourcc(
             *self.pixel_format
@@ -158,9 +226,9 @@ class _CameraGrabber:
             fourcc
         )
 
-        # =================================================
-        # SET RESOLUTION
-        # =================================================
+        # -------------------------------------------------
+        # RESOLUTION
+        # -------------------------------------------------
 
         self.cap.set(
             cv2.CAP_PROP_FRAME_WIDTH,
@@ -172,18 +240,32 @@ class _CameraGrabber:
             self.height
         )
 
-        # =================================================
-        # SET FPS
-        # =================================================
+        # -------------------------------------------------
+        # FPS
+        # -------------------------------------------------
 
         self.cap.set(
             cv2.CAP_PROP_FPS,
             self.fps
         )
 
-        # =================================================
+        # -------------------------------------------------
+        # LOW BUFFER
+        # -------------------------------------------------
+
+        try:
+
+            self.cap.set(
+                cv2.CAP_PROP_BUFFERSIZE,
+                1
+            )
+
+        except Exception:
+            pass
+
+        # -------------------------------------------------
         # CEK SETTING AKTUAL
-        # =================================================
+        # -------------------------------------------------
 
         actual_width = int(
             self.cap.get(
@@ -204,13 +286,13 @@ class _CameraGrabber:
         print(
             f"Kamera {self.label}: "
             f"{actual_width}x{actual_height} "
-            f"@ {actual_fps:.1f} FPS "
-            f"| {self.pixel_format}"
+            f"@ {actual_fps:.1f} FPS | "
+            f"{self.pixel_format}"
         )
 
-        # =================================================
+        # -------------------------------------------------
         # START THREAD
-        # =================================================
+        # -------------------------------------------------
 
         self.running = True
 
@@ -227,6 +309,8 @@ class _CameraGrabber:
             f"{self.label} dimulai"
         )
 
+        return True
+
     # =====================================================
     # READ LOOP
     # =====================================================
@@ -238,13 +322,29 @@ class _CameraGrabber:
         while self.running:
 
             if self.cap is None:
-
                 break
 
-            ret, frame = self.cap.read()
+            try:
 
-            if ret:
-            
+                ret, frame = self.cap.read()
+
+            except Exception as e:
+
+                print(
+                    f"ERROR read kamera "
+                    f"{self.label}: {e}"
+                )
+
+                time.sleep(0.1)
+
+                continue
+
+            if ret and frame is not None:
+
+                # -------------------------------------------------
+                # ROTATE UNDERWATER
+                # -------------------------------------------------
+
                 if self.rotate_left:
 
                     frame = cv2.rotate(
@@ -252,6 +352,9 @@ class _CameraGrabber:
                         cv2.ROTATE_90_COUNTERCLOCKWISE
                     )
 
+                # -------------------------------------------------
+                # SIMPAN FRAME TERBARU
+                # -------------------------------------------------
 
                 with self.frame_lock:
 
@@ -264,10 +367,12 @@ class _CameraGrabber:
                     f"kamera {self.label}"
                 )
 
+                time.sleep(0.05)
+
             time.sleep(interval)
 
     # =====================================================
-    # STOP
+    # STOP CAMERA
     # =====================================================
 
     def stop(self):
@@ -283,23 +388,24 @@ class _CameraGrabber:
 
         self.running = False
 
-        # =================================================
-        # TUNGGU THREAD
-        # =================================================
+        # -------------------------------------------------
+        # WAIT THREAD
+        # -------------------------------------------------
 
-        if self.thread is not None:
+        if (
+            self.thread is not None
+            and self.thread.is_alive()
+        ):
 
-            if self.thread.is_alive():
-
-                self.thread.join(
-                    timeout=2.0
-                )
+            self.thread.join(
+                timeout=2.0
+            )
 
         self.thread = None
 
-        # =================================================
-        # RELEASE
-        # =================================================
+        # -------------------------------------------------
+        # RELEASE CAMERA
+        # -------------------------------------------------
 
         if self.cap is not None:
 
@@ -316,9 +422,9 @@ class _CameraGrabber:
 
             self.cap = None
 
-        # =================================================
+        # -------------------------------------------------
         # CLEAR FRAME
-        # =================================================
+        # -------------------------------------------------
 
         with self.frame_lock:
 
@@ -340,13 +446,10 @@ class _CameraGrabber:
             return self.latest_frame
 
     # =====================================================
-    # SAVE PHOTO
+    # SAVE SNAPSHOT
     # =====================================================
 
-    def save_snapshot(
-        self,
-        save_dir
-    ):
+    def save_snapshot(self, save_dir):
 
         frame = self.get_frame()
 
@@ -359,25 +462,32 @@ class _CameraGrabber:
 
             return None
 
+        # -------------------------------------------------
+        # CREATE DIRECTORY
+        # -------------------------------------------------
+
         os.makedirs(
             save_dir,
             exist_ok=True
         )
 
+        # -------------------------------------------------
+        # FILENAME
+        # -------------------------------------------------
+
         filename = os.path.join(
-
             save_dir,
-
             f"{self.label}_"
             f"{time.strftime('%Y%m%d_%H%M%S')}.jpg"
         )
 
+        # -------------------------------------------------
+        # SAVE
+        # -------------------------------------------------
+
         success = cv2.imwrite(
-
             filename,
-
             frame,
-
             [
                 int(
                     cv2.IMWRITE_JPEG_QUALITY
@@ -414,12 +524,12 @@ _surface_grabber = _CameraGrabber(
     "surface",
 
     SURFACE_WIDTH,
-
     SURFACE_HEIGHT,
 
     SURFACE_FPS,
 
     SURFACE_FORMAT,
+
     rotate_left=False
 )
 
@@ -431,12 +541,12 @@ _underwater_grabber = _CameraGrabber(
     "underwater",
 
     UNDERWATER_WIDTH,
-
     UNDERWATER_HEIGHT,
 
     UNDERWATER_FPS,
 
     UNDERWATER_FORMAT,
+
     rotate_left=True
 )
 
@@ -461,7 +571,7 @@ def _add_cors_headers(response):
 
     response.headers[
         "Access-Control-Allow-Methods"
-    ] = "GET, OPTIONS"
+    ] = "GET, POST, OPTIONS"
 
     response.headers[
         "Access-Control-Allow-Headers"
@@ -471,43 +581,276 @@ def _add_cors_headers(response):
 
 
 # =========================================================
-# GPS TELEMETRY
+# GCS HEARTBEAT
 # =========================================================
 
 @app.route(
-    "/telemetry"
+    "/ping_gcs",
+    methods=[
+        "GET",
+        "POST",
+        "OPTIONS"
+    ]
 )
+def ping_gcs():
+
+    trigger_heartbeat()
+
+    return jsonify({
+        "status": "ok",
+        "gcs_active": True,
+        "timestamp": time.time()
+    }), 200
+
+
+# =========================================================
+# TELEMETRY
+# =========================================================
+
+@app.route("/telemetry")
 def telemetry():
 
+    # Request telemetry = GCS aktif
+    trigger_heartbeat()
+
+    # -----------------------------------------------------
+    # GPS
+    # -----------------------------------------------------
+
     data = get_gps_data()
-    speed_knots = data["speed_knots"]
-    motor_speed_mps = data.get("motor_speed_mps")
+
+    if data is None:
+        data = {}
+
+    speed_knots = data.get(
+        "speed_knots"
+    )
+
+    if speed_knots is not None:
+
+        try:
+
+            gps_speed_mps = (
+                float(speed_knots)
+                * 0.514444
+            )
+
+        except (
+            ValueError,
+            TypeError
+        ):
+
+            gps_speed_mps = None
+
+    else:
+
+        gps_speed_mps = None
+
+    course = data.get(
+        "course"
+    )
+
+    heading = data.get(
+        "heading"
+    )
+
+    # -----------------------------------------------------
+    # MOTOR
+    # -----------------------------------------------------
+
+    motor = get_motor_data()
+
+    if motor is None:
+        motor = {}
+
+    try:
+
+        left_rpm = float(
+            motor.get(
+                "left_rpm",
+                0.0
+            )
+        )
+
+    except (
+        ValueError,
+        TypeError
+    ):
+
+        left_rpm = 0.0
+
+    try:
+
+        right_rpm = float(
+            motor.get(
+                "right_rpm",
+                0.0
+            )
+        )
+
+    except (
+        ValueError,
+        TypeError
+    ):
+
+        right_rpm = 0.0
+
+    try:
+
+        motor_speed_mps = float(
+            motor.get(
+                "speed_mps",
+                0.0
+            )
+        )
+
+    except (
+        ValueError,
+        TypeError
+    ):
+
+        motor_speed_mps = 0.0
+
+    motor_direction = str(
+        motor.get(
+            "direction",
+            "STOP"
+        )
+    ).upper()
+
+    if motor_direction not in (
+        "FORWARD",
+        "REVERSE",
+        "STOP"
+    ):
+
+        motor_direction = "STOP"
+
+    motor_updated_at = motor.get(
+        "updated_at",
+        0.0
+    )
+
+    # -----------------------------------------------------
+    # DISPLAY SPEED
+    # -----------------------------------------------------
+    #
+    # Motor feedback diprioritaskan.
+    #
+    # Jika motor_state belum menerima data STM32,
+    # speed motor default 0.0 sehingga GPS menjadi
+    # fallback.
+    # -----------------------------------------------------
+
+    if motor_updated_at:
+
+        display_speed = motor_speed_mps
+
+    elif gps_speed_mps is not None:
+
+        display_speed = gps_speed_mps
+
+    else:
+
+        display_speed = 0.0
+
+    # -----------------------------------------------------
+    # RESPONSE
+    # -----------------------------------------------------
 
     response = jsonify({
-        "lat": data["latitude"],
-        "lon": data["longitude"],
-        "speed": (
-            motor_speed_mps
-            if motor_speed_mps is not None
-            else speed_knots * 0.514444
-            if speed_knots is not None
-            else None
+
+        # =========================
+        # GPS
+        # =========================
+
+        "lat": data.get(
+            "latitude"
         ),
-        "course": data["course"] if data["course"] is not None else data["heading"],
-        "heading": data["heading"],
-        "fix": data["fix"],
+
+        "lon": data.get(
+            "longitude"
+        ),
+
+        "speed": display_speed,
+
+        "course": (
+            course
+            if course is not None
+            else heading
+        ),
+
+        "heading": heading,
+
+        "fix": data.get(
+            "fix",
+            False
+        ),
+
         "speed_knots": speed_knots,
-        "speed_kmh": data["speed_kmh"],
+
+        "speed_kmh": data.get(
+            "speed_kmh"
+        ),
+
+        "altitude": data.get(
+            "altitude"
+        ),
+
+        "satellites": data.get(
+            "satellites"
+        ),
+
+        "hdop": data.get(
+            "hdop"
+        ),
+
+        "timestamp": data.get(
+            "timestamp"
+        ),
+
+        # =========================
+        # MOTOR
+        # =========================
+
+        "left_rpm": left_rpm,
+
+        "right_rpm": right_rpm,
+
         "motor_speed_mps": motor_speed_mps,
-        "left_rpm": data.get("left_rpm"),
-        "right_rpm": data.get("right_rpm"),
-        "motor_direction": data.get("motor_direction", "STOP"),
-        "timestamp": data["timestamp"]
+
+        "motor_direction": motor_direction,
+
+        "motor_updated_at": motor_updated_at,
+
+        # =========================
+        # GCS
+        # =========================
+
+        "gcs_active": is_gcs_active(),
+
+        "heartbeat_age": get_heartbeat_age()
     })
+
+    # -----------------------------------------------------
+    # NO CACHE
+    # -----------------------------------------------------
 
     response.headers[
         "Cache-Control"
-    ] = "no-store"
+    ] = (
+        "no-store, "
+        "no-cache, "
+        "must-revalidate"
+    )
+
+    response.headers[
+        "Pragma"
+    ] = "no-cache"
+
+    response.headers[
+        "Expires"
+    ] = "0"
 
     return response
 
@@ -520,36 +863,43 @@ def _mjpeg_generator(grabber):
 
     while True:
 
+        # Streaming request = GCS aktif
+        trigger_heartbeat()
+
         frame = grabber.get_frame()
 
         if frame is not None:
 
-            ok, buffer = cv2.imencode(
+            try:
 
-                ".jpg",
+                ok, buffer = cv2.imencode(
+                    ".jpg",
+                    frame,
+                    [
+                        int(
+                            cv2.IMWRITE_JPEG_QUALITY
+                        ),
+                        JPEG_QUALITY
+                    ]
+                )
 
-                frame,
+            except Exception as e:
 
-                [
-                    int(
-                        cv2.IMWRITE_JPEG_QUALITY
-                    ),
-                    JPEG_QUALITY
-                ]
-            )
+                print(
+                    f"ERROR encode "
+                    f"{grabber.label}: {e}"
+                )
 
-            if ok:
+                ok = False
+                buffer = None
 
-                jpg_bytes = buffer.tobytes()
+            if ok and buffer is not None:
 
                 yield (
-
                     b"--frame\r\n"
-
-                    b"Content-Type: image/jpeg\r\n\r\n"
-
-                    + jpg_bytes
-
+                    b"Content-Type: image/jpeg\r\n"
+                    b"Cache-Control: no-cache\r\n\r\n"
+                    + buffer.tobytes()
                     + b"\r\n"
                 )
 
@@ -609,13 +959,15 @@ def _list_photos(photo_dir):
 
 
 # =========================================================
-# API PHOTOS
+# API LIST PHOTOS
 # =========================================================
 
 @app.route(
     "/api/photos/<camera>"
 )
 def api_list_photos(camera):
+
+    trigger_heartbeat()
 
     photo_dir = _PHOTO_DIRS.get(
         camera
@@ -636,9 +988,7 @@ def api_list_photos(camera):
         "count": len(files),
 
         "photos": [
-
             f"/photos/{camera}/{fn}"
-
             for fn in files
         ]
     })
@@ -666,6 +1016,8 @@ def get_photo_file(
     filename
 ):
 
+    trigger_heartbeat()
+
     photo_dir = _PHOTO_DIRS.get(
         camera
     )
@@ -688,6 +1040,8 @@ def get_photo_file(
     "/surface_feed"
 )
 def surface_feed():
+
+    trigger_heartbeat()
 
     return Response(
 
@@ -712,6 +1066,8 @@ def surface_feed():
 )
 def underwater_feed():
 
+    trigger_heartbeat()
+
     return Response(
 
         _mjpeg_generator(
@@ -727,7 +1083,7 @@ def underwater_feed():
 
 
 # =========================================================
-# FLASK THREAD
+# SERVER CONTROL
 # =========================================================
 
 _flask_thread = None
@@ -769,7 +1125,8 @@ def start_web_server():
 
         print(
             f"Web API aktif di "
-            f"http://<IP_JETSON>:{STREAM_PORT}/"
+            f"http://<IP_JETSON>:"
+            f"{STREAM_PORT}/"
         )
 
 
@@ -778,8 +1135,6 @@ def start_web_server():
 # =========================================================
 
 def start_streaming():
-
-    global _flask_thread
 
     print()
     print(
@@ -791,12 +1146,34 @@ def start_streaming():
     print(
         "=========================================="
     )
+    print()
 
-    _surface_grabber.start()
+    surface_ok = (
+        _surface_grabber.start()
+    )
 
-    _underwater_grabber.start()
+    underwater_ok = (
+        _underwater_grabber.start()
+    )
+
+    # Web server tetap dijalankan walaupun
+    # salah satu kamera gagal.
 
     start_web_server()
+
+    print()
+
+    print(
+        f"Surface camera   : "
+        f"{'OK' if surface_ok else 'FAILED'}"
+    )
+
+    print(
+        f"Underwater camera: "
+        f"{'OK' if underwater_ok else 'FAILED'}"
+    )
+
+    print()
 
 
 # =========================================================
@@ -804,6 +1181,10 @@ def start_streaming():
 # =========================================================
 
 def stop_streaming():
+
+    print(
+        "Menghentikan camera streaming..."
+    )
 
     _surface_grabber.stop()
 
