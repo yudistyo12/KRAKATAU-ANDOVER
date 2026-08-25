@@ -40,7 +40,13 @@ gps_data = {
     "satellites": None,
     "hdop": None,
     "fix": False,
-    "timestamp": None
+    "timestamp": None,
+    "reader_status": "STARTING",
+    "reader_port": None,
+    "reader_baud": None,
+    "last_nmea": None,
+    "last_nmea_at": None,
+    "last_error": None
 }
 
 _gps_lock = threading.Lock()
@@ -68,7 +74,12 @@ def parse_nmea(line):
         # Posisi + altitude + satellite + HDOP
         # -------------------------------------------------
 
-        msg = pynmea2.parse(line)
+        msg = pynmea2.parse(line, check=False)
+
+        with _gps_lock:
+            gps_data["last_nmea"] = msg.sentence_type
+            gps_data["last_nmea_at"] = time.time()
+            gps_data["last_error"] = None
 
         if msg.sentence_type == "GGA":
 
@@ -125,7 +136,8 @@ def parse_nmea(line):
                 gps_data["fix"] = _gga_fix or _rmc_fix
 
     except Exception as e:
-
+        with _gps_lock:
+            gps_data["last_error"] = str(e)
         print(f"[GPS PARSE ERROR] {e}")
 
 
@@ -198,7 +210,7 @@ def _connect_gps(port):
                     continue
 
                 try:
-                    message = pynmea2.parse(line)
+                    message = pynmea2.parse(line, check=False)
                 except pynmea2.ParseError:
                     continue
 
@@ -221,16 +233,28 @@ def _gps_loop(port, baud, verbose):
 
     global _gps_serial
 
+    with _gps_lock:
+        gps_data["reader_status"] = "CONNECTING"
+        gps_data["reader_port"] = port
+
     last_display = 0
 
     while not _stop_event.is_set():
         if _gps_serial is None or not _gps_serial.is_open:
             _gps_serial, first_line = _connect_gps(port)
             if _gps_serial is None:
+                with _gps_lock:
+                    gps_data["reader_status"] = "NO_NMEA"
                 print(f"[GPS] No NMEA data on {port}; retrying...")
                 time.sleep(2)
                 continue
             parse_nmea(first_line)
+            with _gps_lock:
+                gps_data["reader_status"] = "CONNECTED"
+                gps_data["reader_baud"] = next(
+                    baud_rate for baud_rate in GPS_BAUD_CANDIDATES
+                    if baud_rate == _gps_serial.baudrate
+                )
 
         try:
             line = _gps_serial.readline().decode(
@@ -240,6 +264,9 @@ def _gps_loop(port, baud, verbose):
 
         except Exception as e:
             print(f"[GPS READ ERROR] {e}")
+            with _gps_lock:
+                gps_data["reader_status"] = "READ_ERROR"
+                gps_data["last_error"] = str(e)
             try:
                 _gps_serial.close()
             except Exception:

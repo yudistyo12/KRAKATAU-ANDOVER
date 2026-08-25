@@ -782,6 +782,30 @@ def telemetry():
             "timestamp"
         ),
 
+        "gps_reader_status": data.get(
+            "reader_status"
+        ),
+
+        "gps_reader_port": data.get(
+            "reader_port"
+        ),
+
+        "gps_reader_baud": data.get(
+            "reader_baud"
+        ),
+
+        "gps_last_nmea": data.get(
+            "last_nmea"
+        ),
+
+        "gps_last_nmea_at": data.get(
+            "last_nmea_at"
+        ),
+
+        "gps_last_error": data.get(
+            "last_error"
+        ),
+
         "speed_knots": speed_knots,
 
         "speed_kmh": data.get(
