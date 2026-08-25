@@ -13,6 +13,7 @@ const GPSData = {
     pathHistory: [],
     MAX_PATH_LENGTH: 200,
     fetchInProgress: false,
+    lastSuccessfulFetch: null,
     visualPosition: null,
     visualHistory: [],
     lastMotionTime: null,
@@ -59,6 +60,7 @@ const GPSData = {
 
             const data = await response.json();
             this.data = data;
+            this.lastSuccessfulFetch = Date.now();
             this.updateVisualMotion(data);
 
             if (data.fix && Number.isFinite(Number(data.lat)) && Number.isFinite(Number(data.lon))) {
@@ -75,6 +77,15 @@ const GPSData = {
             }
         } catch (error) {
             console.error('[GCS] Error fetching GPS telemetry:', error);
+            this.data = {
+                ...this.data,
+                lat: null,
+                lon: null,
+                speed: null,
+                course: null,
+                heading: null,
+                gps_valid: false
+            };
         } finally {
             clearTimeout(timeoutId);
             this.fetchInProgress = false;

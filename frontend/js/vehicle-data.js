@@ -27,23 +27,23 @@ const VehicleState = {
     },
 
     render(data) {
-        this.data = data;
-        const courseOrHeading = data.course ?? data.heading;
-        const hasCoordinates = data.gps_valid !== false
-            && Number.isFinite(Number(data.lat))
-            && Number.isFinite(Number(data.lon));
+        this.data = data || {};
+        const courseOrHeading = this.data.course ?? this.data.heading;
+        const hasCoordinates = this.data.gps_valid === true
+            && Number.isFinite(Number(this.data.lat))
+            && Number.isFinite(Number(this.data.lon));
 
         if (this.dom.speed) {
-            this.dom.speed.textContent = this.formatValue(data.speed, 1, ' m/s');
+            this.dom.speed.textContent = this.formatValue(this.data.speed, 1, ' m/s');
         }
         if (this.dom.course) {
             this.dom.course.textContent = this.formatValue(courseOrHeading, 1, ' °');
         }
         if (this.dom.lat) {
-            this.dom.lat.textContent = hasCoordinates ? this.formatValue(data.lat, 6) : '--';
+            this.dom.lat.textContent = hasCoordinates ? this.formatValue(this.data.lat, 6) : '--';
         }
         if (this.dom.lon) {
-            this.dom.lon.textContent = hasCoordinates ? this.formatValue(data.lon, 6) : '--';
+            this.dom.lon.textContent = hasCoordinates ? this.formatValue(this.data.lon, 6) : '--';
         }
     },
 
