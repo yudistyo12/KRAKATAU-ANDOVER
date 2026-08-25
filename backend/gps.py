@@ -135,6 +135,25 @@ def parse_nmea(line):
                 gps_data["timestamp"] = str(msg.timestamp)
                 gps_data["fix"] = _gga_fix or _rmc_fix
 
+        # -------------------------------------------------
+        # VTG
+        # Course and ground speed fallback
+        # -------------------------------------------------
+
+        elif msg.sentence_type == "VTG":
+
+            with _gps_lock:
+
+                if msg.true_track not in (None, ""):
+                    gps_data["course"] = float(msg.true_track)
+
+                if msg.spd_over_grnd_kmph not in (None, ""):
+                    speed_kmh = float(msg.spd_over_grnd_kmph)
+                    gps_data["speed_kmh"] = speed_kmh
+                    gps_data["speed_knots"] = speed_kmh / 1.852
+
+                gps_data["fix"] = _gga_fix or _rmc_fix
+
     except Exception as e:
         with _gps_lock:
             gps_data["last_error"] = str(e)
