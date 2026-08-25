@@ -12,8 +12,7 @@ import os
 
 GPS_PORT = os.getenv("GPS_DEVICE", "/dev/ttyUSB0")
 PORT = "/dev/ttyACM0"
-GPS_BAUD = int(os.getenv("GPS_BAUD", "9600"))
-GPS_RECONNECT_DELAY = float(os.getenv("GPS_RECONNECT_DELAY", "2"))
+GPS_BAUD = int(os.getenv("GPS_BAUD", "115200"))
 
 # =========================================================
 # GPS DATA (shared, thread-safe)
@@ -71,7 +70,7 @@ def parse_nmea(line):
                 if msg.gps_qual is not None:
                     _gga_fix = int(msg.gps_qual) > 0
 
-                if msg.latitude is not None and msg.longitude is not None:
+                if msg.latitude and msg.longitude:
                     gps_data["latitude"] = msg.latitude
                     gps_data["longitude"] = msg.longitude
 
@@ -85,11 +84,7 @@ def parse_nmea(line):
                     gps_data["hdop"] = float(msg.horizontal_dil)
 
                 gps_data["timestamp"] = str(msg.timestamp)
-                gps_data["fix"] = bool(
-                    (_gga_fix or _rmc_fix)
-                    and gps_data["latitude"] is not None
-                    and gps_data["longitude"] is not None
-                )
+                gps_data["fix"] = _gga_fix or _rmc_fix
 
 
         # -------------------------------------------------
@@ -103,7 +98,7 @@ def parse_nmea(line):
 
                 _rmc_fix = msg.status == "A"
 
-                if msg.latitude is not None and msg.longitude is not None:
+                if msg.latitude and msg.longitude:
                     gps_data["latitude"] = msg.latitude
                     gps_data["longitude"] = msg.longitude
 
@@ -120,11 +115,7 @@ def parse_nmea(line):
                     gps_data["course"] = float(msg.true_course)
 
                 gps_data["timestamp"] = str(msg.timestamp)
-                gps_data["fix"] = bool(
-                    (_gga_fix or _rmc_fix)
-                    and gps_data["latitude"] is not None
-                    and gps_data["longitude"] is not None
-                )
+                gps_data["fix"] = _gga_fix or _rmc_fix
 
     except Exception as e:
 
@@ -188,17 +179,18 @@ def _gps_loop(port, baud, verbose):
 
     global _gps_serial
 
+    try:
+        _gps_serial = serial.Serial(port, baud, timeout=1)
+        print(f"[OK] GPS connected on {port}")
+
+    except Exception as e:
+        print("[ERROR] Cannot open GPS")
+        print(e)
+        return
+
     last_display = 0
 
     while not _stop_event.is_set():
-        if _gps_serial is None or not _gps_serial.is_open:
-            try:
-                _gps_serial = serial.Serial(port, baud, timeout=1)
-                print(f"[OK] GPS connected on {port} at {baud} baud")
-            except serial.SerialException as error:
-                print(f"[GPS] Waiting for {port}: {error}")
-                time.sleep(GPS_RECONNECT_DELAY)
-                continue
 
         try:
             line = _gps_serial.readline().decode(
@@ -208,12 +200,7 @@ def _gps_loop(port, baud, verbose):
 
         except Exception as e:
             print(f"[GPS READ ERROR] {e}")
-            try:
-                _gps_serial.close()
-            except Exception:
-                pass
-            _gps_serial = None
-            time.sleep(GPS_RECONNECT_DELAY)
+            time.sleep(0.5)
             continue
 
         if not line:
