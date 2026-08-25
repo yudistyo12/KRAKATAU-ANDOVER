@@ -1109,7 +1109,7 @@ def get_photo_file(
     "/surface_feed"
 )
 def surface_feed():
-    return Response(
+    response = Response(
 
         _mjpeg_generator(
             _surface_grabber
@@ -1121,6 +1121,10 @@ def surface_feed():
             " boundary=frame"
         )
     )
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Connection"] = "keep-alive"
+    return response
 
 
 @app.route(
@@ -1152,7 +1156,7 @@ def camera_status(camera):
     "/underwater_feed"
 )
 def underwater_feed():
-    return Response(
+    response = Response(
 
         _mjpeg_generator(
             _underwater_grabber
@@ -1164,6 +1168,10 @@ def underwater_feed():
             " boundary=frame"
         )
     )
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Connection"] = "keep-alive"
+    return response
 
 
 # =========================================================

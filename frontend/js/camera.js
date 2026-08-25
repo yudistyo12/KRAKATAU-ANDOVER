@@ -30,17 +30,27 @@ const CameraManager = {
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
             const image = document.getElementById(`${camera}-camera`);
-            const streamConnected = image && image.complete && image.naturalWidth > 0;
-            const online = (data.running && data.has_frame) || streamConnected;
+            const online = Boolean(data.running && data.has_frame);
             status.className = `camera-status ${online ? 'online' : 'offline'}`;
             status.innerHTML = `<span class="dot"></span> ${online ? 'ONLINE' : 'OFFLINE'}`;
+
+            if (!online && image) {
+                this.scheduleStreamReconnect(
+                    `${camera}-camera`,
+                    image,
+                    camera === 'surface' ? CONFIG.CAMERA.SURFACE : CONFIG.CAMERA.UNDERWATER
+                );
+            }
         } catch (error) {
             const image = document.getElementById(`${camera}-camera`);
-            const streamConnected = image && image.complete && image.naturalWidth > 0;
-
-            if (!streamConnected) {
-                status.className = 'camera-status offline';
-                status.innerHTML = '<span class="dot"></span> OFFLINE';
+            status.className = 'camera-status offline';
+            status.innerHTML = '<span class="dot"></span> OFFLINE';
+            if (image) {
+                this.scheduleStreamReconnect(
+                    `${camera}-camera`,
+                    image,
+                    camera === 'surface' ? CONFIG.CAMERA.SURFACE : CONFIG.CAMERA.UNDERWATER
+                );
             }
         }
     },
